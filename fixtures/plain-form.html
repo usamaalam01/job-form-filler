@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Fixture: Plain Form</title></head>
+<body>
+<script>window.__formSubmitted = false;</script>
+<form id="app-form" onsubmit="window.__formSubmitted=true; return false;">
+  <h2>Job Application</h2>
+
+  <label for="fullName">Full Name</label>
+  <input type="text" id="fullName" name="fullName" autocomplete="name" required />
+
+  <label for="email">Email</label>
+  <input type="email" id="email" name="email" autocomplete="email" required />
+
+  <label for="phone">Phone</label>
+  <input type="tel" id="phone" name="phone" autocomplete="tel" />
+
+  <label for="city">City</label>
+  <input type="text" id="city" name="city" autocomplete="address-level2" />
+
+  <label for="country">Country</label>
+  <input type="text" id="country" name="country" autocomplete="country-name" />
+
+  <label for="linkedin">LinkedIn URL</label>
+  <input type="url" id="linkedin" name="linkedin" />
+
+  <label for="github">GitHub URL</label>
+  <input type="url" id="github" name="github" />
+
+  <label for="currentTitle">Current Job Title</label>
+  <input type="text" id="currentTitle" name="currentTitle" />
+
+  <label for="currentCompany">Current Company</label>
+  <input type="text" id="currentCompany" name="currentCompany" />
+
+  <label for="degree">Degree</label>
+  <select id="degree" name="degree">
+    <option value="">Select…</option>
+    <option>Bachelor's Degree</option>
+    <option>Master's Degree</option>
+    <option>PhD</option>
+    <option>Associate Degree</option>
+  </select>
+
+  <label for="university">University</label>
+  <input type="text" id="university" name="university" />
+
+  <label for="noticePeriod">Notice Period</label>
+  <input type="text" id="noticePeriod" name="noticePeriod" />
+
+  <label for="resume">Resume</label>
+  <input type="file" id="resume" name="resume" accept=".pdf,.doc,.docx" />
+
+  <label for="summary">Professional Summary</label>
+  <textarea id="summary" name="summary" rows="4"></textarea>
+
+  <!-- Unknown field — should be left blank -->
+  <label for="secretQuestion">What is your favourite colour?</label>
+  <input type="text" id="secretQuestion" name="secretQuestion" required />
+
+  <!-- Honeypot — should NOT be filled -->
+  <input type="text" name="honeypot" aria-hidden="true" style="display:none" />
+
+  <button type="submit">Submit Application</button>
+</form>
+</body>
+</html>

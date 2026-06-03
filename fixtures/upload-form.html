@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Fixture: Upload Form</title></head>
+<body>
+<script>window.__formSubmitted = false;</script>
+<form onsubmit="window.__formSubmitted=true; return false;">
+  <label for="name">Full Name</label>
+  <input type="text" id="name" name="name" />
+
+  <label for="resume">Upload Resume (PDF)</label>
+  <input type="file" id="resume" name="resume" accept=".pdf" />
+
+  <label for="coverLetter">Upload Cover Letter</label>
+  <input type="file" id="coverLetter" name="coverLetter" />
+
+  <label for="other">Other document</label>
+  <input type="file" id="other" name="other" />
+
+  <button type="submit">Submit</button>
+</form>
+</body>
+</html>

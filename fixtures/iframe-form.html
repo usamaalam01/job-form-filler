@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Fixture: Iframe Form</title></head>
+<body>
+<script>window.__formSubmitted = false;</script>
+<h2>Main page fields</h2>
+<form>
+  <label for="name">Full Name</label>
+  <input type="text" id="name" name="name" />
+</form>
+
+<h3>Same-origin iframe</h3>
+<iframe id="same-origin-frame" srcdoc="
+  <form onsubmit='return false;'>
+    <label for='email'>Email</label>
+    <input type='email' id='email' name='email' />
+    <button type='submit'>Submit</button>
+  </form>
+" style="width:100%;border:1px solid #ccc;height:100px"></iframe>
+
+<h3>Cross-origin iframe (cannot fill)</h3>
+<iframe src="https://example.com" style="width:100%;height:80px" title="cross-origin"></iframe>
+</body>
+</html>

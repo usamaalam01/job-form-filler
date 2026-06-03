@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Fixture: Repeatable Form</title>
+<script>
+window.__formSubmitted = false;
+let count = 1;
+function addExperience() {
+  count++;
+  const container = document.getElementById('experiences');
+  const block = document.createElement('div');
+  block.className = 'experience-block';
+  block.innerHTML = `<h4>Work Experience #${count}</h4>
+    <label>Job Title <input type="text" name="title_${count}" /></label>
+    <label>Company <input type="text" name="company_${count}" /></label>`;
+  container.appendChild(block);
+}
+</script>
+</head>
+<body>
+<form onsubmit="window.__formSubmitted=true; return false;">
+  <div id="experiences">
+    <div class="experience-block">
+      <h4>Work Experience #1</h4>
+      <label>Job Title <input type="text" name="title_1" /></label>
+      <label>Company <input type="text" name="company_1" /></label>
+    </div>
+  </div>
+  <button type="button" id="add-experience" onclick="addExperience()">+ Add another experience</button>
+  <button type="submit">Submit</button>
+</form>
+</body>
+</html>

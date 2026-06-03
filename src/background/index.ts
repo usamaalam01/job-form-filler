@@ -1,5 +1,5 @@
-// Background service worker entry point.
-// Wired up in Phase 0; orchestration logic added in P1-T8.
+import { initOrchestrator } from './orchestrator'
+
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[JFF] Extension installed.')
 })
@@ -7,3 +7,5 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ tabId: tab.id! })
 })
+
+initOrchestrator()

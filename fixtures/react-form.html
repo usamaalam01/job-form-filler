@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fixture: React Controlled Form</title>
+</head>
+<body>
+<script>window.__formSubmitted = false;</script>
+<div id="root"></div>
+<!-- React via CDN (dev build for fixture use only) -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script>
+const { useState } = React;
+
+function App() {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [summary, setSummary] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    window.__formSubmitted = true;
+    setSubmitted(true);
+  };
+
+  return React.createElement('form', { onSubmit: handleSubmit, id: 'react-form' },
+    React.createElement('h2', null, 'React Controlled Form'),
+    submitted
+      ? React.createElement('p', null, 'Submitted! (window.__formSubmitted = true)')
+      : null,
+
+    React.createElement('label', { htmlFor: 'name' }, 'Full Name'),
+    React.createElement('input', {
+      id: 'name', type: 'text', name: 'name', value: name,
+      onChange: e => setName(e.target.value),
+    }),
+
+    React.createElement('label', { htmlFor: 'email' }, 'Email'),
+    React.createElement('input', {
+      id: 'email', type: 'email', name: 'email', value: email,
+      onChange: e => setEmail(e.target.value),
+    }),
+
+    React.createElement('label', { htmlFor: 'phone' }, 'Phone'),
+    React.createElement('input', {
+      id: 'phone', type: 'tel', name: 'phone', value: phone,
+      onChange: e => setPhone(e.target.value),
+    }),
+
+    React.createElement('label', { htmlFor: 'summary' }, 'Professional Summary'),
+    React.createElement('textarea', {
+      id: 'summary', name: 'summary', value: summary, rows: 4,
+      onChange: e => setSummary(e.target.value),
+    }),
+
+    React.createElement('button', { type: 'submit' }, 'Submit'),
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Fixture: Combobox Form</title>
+<style>
+  #country-list { display:none; border:1px solid #ccc; list-style:none; padding:0; margin:0; max-height:150px; overflow:auto; }
+  #country-list li { padding:6px 10px; cursor:pointer; }
+  #country-list li:hover { background:#f0f0f0; }
+</style>
+</head>
+<body>
+<script>window.__formSubmitted = false;</script>
+<form onsubmit="window.__formSubmitted=true; return false;">
+  <label>Country</label>
+  <div style="position:relative">
+    <input type="text" id="country-input" role="combobox" aria-expanded="false" autocomplete="off" placeholder="Type a country…" />
+    <ul id="country-list" role="listbox">
+      <li role="option">United Arab Emirates</li>
+      <li role="option">United Kingdom</li>
+      <li role="option">United States</li>
+      <li role="option">Pakistan</li>
+      <li role="option">India</li>
+    </ul>
+  </div>
+  <input type="hidden" id="country-value" name="country" />
+
+  <label for="name">Full Name</label>
+  <input type="text" id="name" name="name" />
+
+  <button type="submit">Submit</button>
+</form>
+<script>
+const input = document.getElementById('country-input');
+const list = document.getElementById('country-list');
+input.addEventListener('input', () => { list.style.display = input.value ? '' : 'none'; });
+list.querySelectorAll('li').forEach(li => {
+  li.addEventListener('click', () => {
+    input.value = li.textContent;
+    document.getElementById('country-value').value = li.textContent;
+    list.style.display = 'none';
+  });
+});
+</script>
+</body>
+</html>

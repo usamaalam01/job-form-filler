@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Fixture: Split Date Form</title></head>
+<body>
+<script>window.__formSubmitted = false;</script>
+<form id="app-form" onsubmit="window.__formSubmitted=true; return false;">
+  <h2>Work Experience</h2>
+  <label for="startMonth">Start Month</label>
+  <select id="startMonth" name="startMonth">
+    <option value="">Month</option>
+    <option value="1">January</option><option value="2">February</option>
+    <option value="3">March</option><option value="4">April</option>
+    <option value="5">May</option><option value="6">June</option>
+    <option value="7">July</option><option value="8">August</option>
+    <option value="9">September</option><option value="10">October</option>
+    <option value="11">November</option><option value="12">December</option>
+  </select>
+
+  <label for="startYear">Start Year</label>
+  <select id="startYear" name="startYear">
+    <option value="">Year</option>
+    <option>2018</option><option>2019</option><option>2020</option>
+    <option>2021</option><option>2022</option><option>2023</option><option>2024</option>
+  </select>
+
+  <label for="endMonth">End Month</label>
+  <select id="endMonth" name="endMonth">
+    <option value="">Month</option>
+    <option value="1">January</option><option value="2">February</option>
+    <option value="3">March</option><option value="12">December</option>
+  </select>
+
+  <label for="endYear">End Year</label>
+  <select id="endYear" name="endYear">
+    <option value="">Year</option>
+    <option>2020</option><option>2021</option><option>2022</option><option>2023</option>
+  </select>
+
+  <button type="submit">Submit</button>
+</form>
+</body>
+</html>

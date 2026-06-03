@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Fixture: Shadow DOM Form</title></head>
+<body>
+<script>window.__formSubmitted = false;</script>
+<div id="shadow-host"></div>
+<script>
+const host = document.getElementById('shadow-host');
+const shadow = host.attachShadow({ mode: 'open' });
+shadow.innerHTML = `
+  <form onsubmit="window.__formSubmitted=true; return false;" style="padding:20px">
+    <label for="sname">Full Name</label>
+    <input type="text" id="sname" name="fullName" />
+    <label for="semail">Email</label>
+    <input type="email" id="semail" name="email" />
+    <button type="submit">Submit</button>
+  </form>
+`;
+</script>
+</body>
+</html>

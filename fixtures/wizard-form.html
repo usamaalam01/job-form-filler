@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Fixture: Wizard Form</title>
+<script>
+window.__formSubmitted = false;
+let step = 1;
+function show(n) {
+  document.querySelectorAll('.step').forEach(s => s.style.display = 'none');
+  document.getElementById('step' + n).style.display = '';
+  step = n;
+}
+window.onload = () => show(1);
+</script>
+</head>
+<body>
+<form onsubmit="window.__formSubmitted=true; return false;">
+  <div id="step1" class="step">
+    <h3>Step 1: Personal</h3>
+    <label for="name">Full Name</label><input type="text" id="name" name="name" />
+    <label for="email">Email</label><input type="email" id="email" name="email" />
+    <button type="button" onclick="show(2)">Next</button>
+  </div>
+  <div id="step2" class="step" style="display:none">
+    <h3>Step 2: Experience</h3>
+    <label for="title">Job Title</label><input type="text" id="title" name="title" />
+    <label for="company">Company</label><input type="text" id="company" name="company" />
+    <button type="button" onclick="show(1)">Back</button>
+    <button type="button" onclick="show(3)">Next</button>
+  </div>
+  <div id="step3" class="step" style="display:none">
+    <h3>Step 3: Education</h3>
+    <label for="degree">Degree</label>
+    <select id="degree" name="degree">
+      <option>Bachelor's Degree</option>
+      <option>Master's Degree</option>
+    </select>
+    <button type="button" onclick="show(2)">Back</button>
+    <button type="submit">Submit</button>
+  </div>
+</form>
+</body>
+</html>
