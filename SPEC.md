@@ -1,6 +1,6 @@
 # SPEC.md — Job Form Filler (Chrome Extension)
 
-> **Status:** Draft v0.2 — source of truth for implementation (validated pass).
+> **Status:** Draft v0.3 — dev plan added (see DEVPLAN.md); roadmap expanded with task IDs.
 > **Owner:** <owner-email>
 > **Last updated:** 2026-06-03
 >
@@ -1021,37 +1021,70 @@ where noted). They are listed for traceability.
 
 ## 21. Phased Roadmap
 
-**Phase 0 — Foundations**
+> See **DEVPLAN.md** for the full phase-by-phase development plan with task
+> breakdowns, file lists, interface definitions, and per-task exit gates.
+
+**Phase 0 — Foundations** *(P0-T1 … P0-T5)*
 - Extension skeleton (MV3, side panel, background, content script), TS types,
-  build/dev loop (Vite/CRXJS), File System Access `FileStore`, settings + secret
-  storage.
+  build/dev loop (Vite/CRXJS).
+- `FileStore` abstraction (File System Access API, atomic writes, write-safety).
+- Settings service (non-secret `settings.json` + `chrome.storage.local` secrets).
+- Typed message bus (background ↔ panel ↔ content).
+- *Exit gate:* `npm run build` clean; extension loads; side panel opens.
 
-**Phase 1 — MVP (generic engine, single happy path)**
-- Profile create/edit + paste-to-structure; multiple profiles.
-- Field detection + **rules mapper**; review table; apply-to-page with correct
-  event dispatch; upload-field flagging; **no LLM yet** (rules-only).
-- Application history + dedupe.
-- *Exit criteria:* AC-1, AC-2, AC-3, AC-5, AC-6, AC-7 pass on fixtures.
+**Phase 1 — MVP: Generic Engine** *(P1-T1 … P1-T10)*
+- Profile parser + Q&A parser + history service.
+- Content script: field detector (all input types, shadow DOM, iframes, upload
+  classification) + value writer (native setter, correct event dispatch).
+- Rules mapper + value formatter (dates, selects, fuzzy option match).
+- Background orchestrator: detect → map (rules-only) → apply → history.
+- Side panel UI: profile selector/editor, review table, flagged items, history view.
+- Fixture HTML forms for E2E testing.
+- **No LLM yet** (rules-only filling).
+- *Exit gate:* AC-1, AC-2, AC-3, AC-5, AC-6, AC-7 pass on fixtures.
 
-**Phase 2 — LLM layer**
-- Provider abstraction + 3 providers (OpenAI, Gemini, Anthropic) + custom; ordered
-  fallback; LLM mapping fallback; Q&A bank + AI drafting; structured-output
-  validation.
-- *Exit criteria:* AC-4 passes; flagged/edited/save-back flows work.
+**Phase 2 — LLM Layer** *(P2-T1 … P2-T6)*
+- LLM provider abstraction + adapters: OpenAI, Gemini, Anthropic, Custom
+  (OpenAI-compatible).
+- Ordered fallback chain with retryable/config error classification.
+- LLM field mapper (prompt construction, context compaction, JSON validation +
+  one repair retry).
+- Q&A bank matcher (rule match → LLM semantic match → AI draft, with save-back).
+- Profile paste-to-structure UI with diff preview.
+- Provider Test / health UI in settings.
+- *Exit gate:* AC-4 passes; Q&A draft + save-back works; all-providers-fail
+  shows rules-only + toast.
 
-**Phase 3 — ATS adapters & robustness**
-- Adapter interface + **first adapter: Workday** (D19), then Greenhouse/Lever/
-  iCIMS/Taleo/Bayt; multi-step wizard re-scan; custom date pickers/comboboxes;
-  shadow DOM; resumability for MV3 worker termination.
+**Phase 3 — ATS Adapters & Robustness** *(P3-T1 … P3-T7)*
+- Adapter interface (override hooks: detectFields, resolveLabel, writeField,
+  addRepeatableBlock).
+- **Workday adapter** first (D19): `data-automation-id` keys, date-picker
+  keyboard simulation, dynamic field loading, MutationObserver settle.
+- Greenhouse, Lever, iCIMS, Taleo, Bayt adapters.
+- Shadow DOM nested traversal + same-/cross-origin iframe hardening.
+- Date-picker + combobox robustness improvements.
+- MV3 service worker resumability (idempotent ops, session persistence via
+  `chrome.storage.local`, EC-22).
+- Repeatable-section auto-add (behind setting, default off).
+- *Exit gate:* Workday snapshot test ≥85% fields; all other adapter smoke tests
+  pass; EC-22 resumability test passes.
 
-**Phase 4 — Polish**
-- Onboarding flow, settings UX, history browser, provider test/health, debug log,
-  "delete all local data".
+**Phase 4 — Polish & Productionisation** *(P4-T1 … P4-T5)*
+- First-run onboarding wizard (folder → profile → LLM → disclaimer).
+- Full settings UX (providers, fallback chain, fill behaviour, security, data
+  management).
+- History browser (search, filter, status update).
+- Debug log with key redaction + download.
+- Production build (`npm run build` → `dist/` loadable in Chrome).
+- *Exit gate:* all AC-1–AC-7 pass on production build.
 
 **Future (post-v1, parked):**
-- LinkedIn Easy Apply module (with ToS review), multilingual/RTL support, Edge/
-  Firefox (with storage fallback), JD-aware tailoring + cover-letter generation,
-  PDF/DOCX import.
+- LinkedIn Easy Apply module (ToS review required).
+- Multilingual/RTL support (Bayt Arabic UI).
+- Edge/Firefox (FileStore export/import fallback).
+- JD-aware tailoring + cover-letter generation.
+- PDF/DOCX resume import.
+- Chrome Web Store distribution.
 
 ---
 
@@ -1142,4 +1175,4 @@ authorization/eligibility; visa/sponsorship; relocation; availability/start date
 
 ---
 
-*End of SPEC.md v0.2.*
+*End of SPEC.md v0.3.*

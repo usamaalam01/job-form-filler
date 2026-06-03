@@ -1,0 +1,2099 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPEC — Job Form Filler (Chrome Extension)</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #222536;
+    --border: #2e3148;
+    --accent: #6c8ef5;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --code-bg: #12141e;
+    --tag-bg: #1e2540;
+    --tag-text: #93aef0;
+    --sidebar-w: 260px;
+    --font: 'Inter', system-ui, -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.7;
+    display: flex;
+  }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    width: var(--sidebar-w);
+    min-height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    overflow-y: auto;
+    padding: 0 0 40px;
+    z-index: 100;
+  }
+  #sidebar-header {
+    padding: 20px 16px 14px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 10;
+  }
+  #sidebar-header .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  #sidebar-header .logo svg { flex-shrink: 0; }
+  #sidebar-header .version {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .nav-section { padding: 16px 0 0; }
+  .nav-section-label {
+    padding: 0 16px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    font-size: 12.5px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color .15s, background .15s;
+    border-left: 2px solid transparent;
+  }
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+  .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: #1e2540; }
+  .nav-item .num {
+    min-width: 18px;
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  /* ── MAIN ── */
+  #main {
+    margin-left: var(--sidebar-w);
+    flex: 1;
+    max-width: 900px;
+    padding: 48px 52px 100px;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    margin-bottom: 48px;
+    padding: 32px 36px;
+    background: linear-gradient(135deg, #1a1d27 0%, #1e2240 100%);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+  }
+  .hero h1 {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .hero h1 span { color: var(--accent); }
+  .hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+  .badge-green { background: #0d2e23; color: var(--green); border: 1px solid #1a5240; }
+  .badge-blue  { background: #111e3a; color: var(--accent); border: 1px solid #1e3060; }
+  .badge-purple{ background: #1a1230; color: var(--accent2); border: 1px solid #2e1e55; }
+  .hero-note {
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: #12141e;
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .hero-note strong { color: var(--text); }
+
+  /* ── SECTIONS ── */
+  .section { margin-bottom: 60px; scroll-margin-top: 24px; }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px; height: 32px;
+    background: var(--tag-bg);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+  h2.section-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    color: #fff;
+  }
+  h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin: 28px 0 12px;
+  }
+  h3.sub { color: var(--text); text-transform: none; font-size: 15px; letter-spacing: 0; }
+  p { color: var(--muted); margin-bottom: 12px; }
+  p strong, li strong { color: var(--text); }
+  ul, ol { padding-left: 20px; color: var(--muted); margin-bottom: 12px; }
+  li { margin-bottom: 5px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: #c4b5fd;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    overflow-x: auto;
+    margin: 16px 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.65;
+    color: #a9b8d4;
+  }
+  pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+  blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 10px 16px;
+    background: var(--tag-bg);
+    border-radius: 0 8px 8px 0;
+    margin: 14px 0;
+    color: var(--muted);
+    font-size: 13.5px;
+  }
+  blockquote strong { color: var(--text); }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+  }
+  .card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 700px) { .card-grid { grid-template-columns: 1fr; } }
+  .card h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .card p, .card li { font-size: 13px; }
+
+  /* ── GOAL / NON-GOAL LISTS ── */
+  .goal-list { list-style: none; padding: 0; }
+  .goal-list li {
+    display: flex;
+    gap: 10px;
+    padding: 9px 14px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 13.5px;
+  }
+  .goal-list li.in  { background: #0d2e23; color: #a7f3d0; }
+  .goal-list li.out { background: #2a1515; color: #fca5a5; }
+  .goal-list li .tag {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    min-width: 28px;
+    margin-top: 2px;
+  }
+  .goal-list li.in  .tag { color: var(--green); }
+  .goal-list li.out .tag { color: var(--red); }
+
+  /* ── DECISION TABLE ── */
+  .dtable { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  .dtable th {
+    background: var(--surface2);
+    padding: 9px 14px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .dtable td {
+    padding: 9px 14px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: top;
+  }
+  .dtable tr:last-child td { border-bottom: none; }
+  .dtable tr:hover td { background: var(--surface2); }
+  .dtable td:first-child { color: var(--accent); font-weight: 700; font-size: 11px; }
+  .dtable td strong { color: var(--text); }
+
+  /* ── ARCH DIAGRAM ── */
+  .arch-diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin: 16px 0;
+  }
+  .arch-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .arch-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    flex: 1;
+    min-width: 160px;
+  }
+  .arch-box.accent { border-color: var(--accent); }
+  .arch-box.purple { border-color: var(--accent2); }
+  .arch-box.green  { border-color: var(--green); }
+  .arch-box h5 {
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .arch-box.accent h5 { color: var(--accent); }
+  .arch-box.purple h5 { color: var(--accent2); }
+  .arch-box.green  h5 { color: var(--green); }
+  .arch-box ul { padding-left: 14px; }
+  .arch-box li { font-size: 11.5px; color: var(--muted); margin-bottom: 3px; }
+  .arch-arrow {
+    text-align: center;
+    color: var(--muted);
+    font-size: 20px;
+    padding: 4px 0;
+  }
+  .arch-connector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    margin: 4px 0 12px;
+  }
+  .arch-connector span { color: var(--accent); font-weight: 600; }
+  .disk-box {
+    background: #0d1a0d;
+    border: 1px dashed #1e5e1e;
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .disk-box h5 { font-size: 12px; font-weight: 700; color: var(--green); margin-bottom: 4px; }
+  .disk-box .files { font-size: 11.5px; color: var(--muted); font-family: var(--mono); }
+
+  /* ── FLOW STEPS ── */
+  .flow { list-style: none; padding: 0; position: relative; }
+  .flow::before {
+    content: '';
+    position: absolute;
+    left: 16px; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .flow li {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+  .flow-num {
+    min-width: 32px; height: 32px;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    flex-shrink: 0;
+    z-index: 1;
+  }
+  .flow-body { padding-top: 5px; font-size: 13.5px; color: var(--muted); }
+  .flow-body strong { color: var(--text); }
+
+  /* ── DATA FLOW ── */
+  .dataflow { list-style: none; padding: 0; }
+  .dataflow li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    position: relative;
+  }
+  .df-layer {
+    min-width: 170px;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 8px;
+    text-align: center;
+    margin-bottom: 4px;
+  }
+  .df-dom     { background: #1a2240; color: #93c5fd; border: 1px solid #1e3a6e; }
+  .df-bg      { background: #1a1232; color: var(--accent2); border: 1px solid #2e1e55; }
+  .df-panel   { background: #0d2e23; color: var(--green); border: 1px solid #1a5240; }
+  .df-disk    { background: #1a1200; color: var(--yellow); border: 1px solid #4a3800; }
+  .df-steps   { padding: 6px 0 6px 16px; font-size: 12px; color: var(--muted); flex: 1; }
+  .df-steps li { margin-bottom: 3px; list-style: disc; padding-left: 0; }
+  .df-arrow { color: var(--muted); font-size: 18px; padding: 0 0 8px 78px; }
+
+  /* ── REQUIREMENTS ── */
+  .req-group { margin-bottom: 28px; }
+  .req-group-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .req-group-title .rid { font-size: 11px; color: var(--accent); font-weight: 800; }
+  .req-item {
+    display: flex;
+    gap: 10px;
+    padding: 9px 14px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .req-item .rid { color: var(--accent); font-size: 11px; font-weight: 800; min-width: 36px; margin-top: 1px; }
+  .req-item strong { color: var(--text); }
+  .must { border-left: 2px solid var(--accent); }
+  .must-not { border-left: 2px solid var(--red); }
+  .should { border-left: 2px solid var(--green); }
+  .may { border-left: 2px solid var(--muted); }
+
+  /* ── EDGE / ERROR TABLES ── */
+  .etable { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12.5px; }
+  .etable th {
+    background: var(--surface2);
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .etable td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: top;
+  }
+  .etable tr:last-child td { border-bottom: none; }
+  .etable tr:hover td { background: var(--surface2); }
+  .etable td:first-child { color: var(--accent); font-weight: 700; white-space: nowrap; }
+  .etable td strong { color: var(--text); }
+
+  /* ── STACK TABLE ── */
+  .stack-table { width: 100%; border-collapse: collapse; }
+  .stack-table th {
+    background: var(--surface2);
+    padding: 9px 14px;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .stack-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--muted);
+    vertical-align: top;
+  }
+  .stack-table tr:last-child td { border-bottom: none; }
+  .stack-table tr:hover td { background: var(--surface2); }
+  .stack-table td:first-child { color: var(--muted); font-size: 11.5px; }
+  .stack-table td:nth-child(2) strong { color: var(--text); }
+
+  /* ── INVARIANTS ── */
+  .invariants { list-style: none; padding: 0; }
+  .invariants li {
+    display: flex;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #200d0d;
+    border: 1px solid #5a1a1a;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: #fca5a5;
+    font-weight: 600;
+  }
+  .invariants li::before { content: '✕'; color: var(--red); font-weight: 900; }
+
+  /* ── SECURITY ITEMS ── */
+  .sec-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .sec-num { color: var(--accent); font-weight: 800; font-size: 12px; min-width: 36px; }
+  .sec-item strong { color: var(--text); }
+
+  /* ── ROADMAP ── */
+  .roadmap { list-style: none; padding: 0; }
+  .phase {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .phase-badge {
+    min-width: 72px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .p0 { background: #1a1d27; color: var(--muted); border: 1px solid var(--border); }
+  .p1 { background: #0d1e3a; color: #60a5fa; border: 1px solid #1e3a6e; }
+  .p2 { background: #1a1232; color: var(--accent2); border: 1px solid #2e1e55; }
+  .p3 { background: #0d2e23; color: var(--green); border: 1px solid #1a5240; }
+  .p4 { background: #1a1800; color: var(--yellow); border: 1px solid #4a3800; }
+  .future { background: #1a1220; color: #c084fc; border: 1px solid #3b1e5a; }
+  .phase-body { font-size: 13px; color: var(--muted); }
+  .phase-body strong { color: var(--text); font-size: 14px; display: block; margin-bottom: 4px; }
+  .phase-body ul { padding-left: 16px; }
+  .phase-body .exit { font-size: 12px; color: var(--green); margin-top: 6px; font-style: italic; }
+
+  /* ── GLOSSARY ── */
+  .glossary { list-style: none; padding: 0; }
+  .glossary li {
+    display: flex;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .glossary li:last-child { border-bottom: none; }
+  .glossary .term { color: var(--accent); font-weight: 700; min-width: 130px; }
+  .glossary .def  { color: var(--muted); }
+
+  /* ── RESOLVED / R-ITEMS ── */
+  .r-item {
+    display: flex;
+    gap: 10px;
+    padding: 9px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .r-item .rid { color: var(--green); font-weight: 800; font-size: 11px; min-width: 28px; }
+  .r-item strong { color: var(--text); }
+
+  /* ── DEV PLAN TASKS ── */
+  .dp-tasks { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+  .dp-task {
+    display: flex;
+    gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .dp-tid {
+    min-width: 52px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .p0t { background: #1a1d27; color: var(--muted); border: 1px solid var(--border); }
+  .p1t { background: #0d1e3a; color: #60a5fa; border: 1px solid #1e3a6e; }
+  .p2t { background: #1a1232; color: var(--accent2); border: 1px solid #2e1e55; }
+  .p3t { background: #0d2e23; color: var(--green); border: 1px solid #1a5240; }
+  .p4t { background: #1a1800; color: var(--yellow); border: 1px solid #4a3800; }
+  .dp-body { flex: 1; min-width: 0; }
+  .dp-title { font-size: 13.5px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .dp-desc { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; line-height: 1.55; }
+  .dp-files { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+  .file-tag {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    color: #c4b5fd;
+  }
+  .dp-gate {
+    font-size: 11.5px;
+    color: var(--green);
+    background: #0a1e14;
+    border: 1px solid #1a4030;
+    border-radius: 6px;
+    padding: 5px 10px;
+  }
+  .dp-gate code { background: none; border: none; color: #6ee7b7; font-size: inherit; padding: 0; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ SIDEBAR ═══════════════════════════ -->
+<nav id="sidebar">
+  <div id="sidebar-header">
+    <div class="logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="18" height="18" rx="3"/>
+        <path d="M8 12h8M8 8h5M8 16h6"/>
+      </svg>
+      Job Form Filler
+    </div>
+    <div class="version">SPEC v0.3 · 2026-06-03</div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-label">Overview</div>
+    <a class="nav-item" href="#s1"><span class="num">01</span>Problem Statement</a>
+    <a class="nav-item" href="#s2"><span class="num">02</span>Goals & Non-Goals</a>
+    <a class="nav-item" href="#s3"><span class="num">03</span>Primary User</a>
+    <a class="nav-item" href="#s4"><span class="num">04</span>Key Decisions</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-label">Design</div>
+    <a class="nav-item" href="#s5"><span class="num">05</span>Architecture</a>
+    <a class="nav-item" href="#s6"><span class="num">06</span>Tech Stack</a>
+    <a class="nav-item" href="#s7"><span class="num">07</span>Data Model</a>
+    <a class="nav-item" href="#s9"><span class="num">09</span>User Flows</a>
+    <a class="nav-item" href="#s10"><span class="num">10</span>Data Flow</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-label">Requirements</div>
+    <a class="nav-item" href="#s8"><span class="num">08</span>Functional Req.</a>
+    <a class="nav-item" href="#s11"><span class="num">11</span>Field Detection</a>
+    <a class="nav-item" href="#s12"><span class="num">12</span>LLM Provider Layer</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-label">Quality & Safety</div>
+    <a class="nav-item" href="#s13"><span class="num">13</span>Edge Cases</a>
+    <a class="nav-item" href="#s14"><span class="num">14</span>Error Handling</a>
+    <a class="nav-item" href="#s15"><span class="num">15</span>Security & Privacy</a>
+    <a class="nav-item" href="#s16"><span class="num">16</span>Legal / ToS</a>
+    <a class="nav-item" href="#s17"><span class="num">17</span>Permissions</a>
+    <a class="nav-item" href="#s19"><span class="num">19</span>Testing</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-label">Reference</div>
+    <a class="nav-item" href="#s18"><span class="num">18</span>Settings</a>
+    <a class="nav-item" href="#s20"><span class="num">20</span>Resolved Decisions</a>
+    <a class="nav-item" href="#s21"><span class="num">21</span>Roadmap</a>
+    <a class="nav-item" href="#sDP"><span class="num">DP</span>Dev Plan</a>
+    <a class="nav-item" href="#s22"><span class="num">22</span>Glossary</a>
+    <a class="nav-item" href="#s23"><span class="num">23</span>Appendices</a>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════ MAIN ════════════════════════════ -->
+<main id="main">
+
+  <!-- HERO -->
+  <div class="hero">
+    <h1>Job Form Filler <span>Chrome Extension</span></h1>
+    <p style="color:var(--muted);margin-top:6px;font-size:14px;">Complete product specification — source of truth for implementation.</p>
+    <div class="hero-meta">
+      <span class="badge badge-green">✓ Draft v0.3</span>
+      <span class="badge badge-blue">Chrome MV3</span>
+      <span class="badge badge-blue">TypeScript + React</span>
+      <span class="badge badge-purple">Hybrid Rules + LLM</span>
+      <span class="badge badge-green">All decisions resolved</span>
+    </div>
+    <div class="hero-note">
+      <strong>Source of truth.</strong> Any coding assistant or developer should be able to build this product from this document alone. When a behaviour is ambiguous, prefer the rule written here; if silent, raise it with the spec owner before coding (§20 lists resolved defaults).
+    </div>
+  </div>
+
+  <!-- §1 -->
+  <section class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2 class="section-title">Overview & Problem Statement</h2>
+    </div>
+
+    <h3>1.1 The Problem</h3>
+    <p>The user applies to jobs on LinkedIn and Bayt. Saved jobs are applied to one by one. Two application paths exist:</p>
+    <div class="card-grid">
+      <div class="card" style="border-color:var(--green)">
+        <h4 style="color:var(--green)">✓ Easy Apply (low pain)</h4>
+        <p>In-platform apply with a few quick questions. Fast, low friction — <em>not the target problem</em>.</p>
+      </div>
+      <div class="card" style="border-color:var(--red)">
+        <h4 style="color:var(--red)">✗ External Apply (high pain)</h4>
+        <p>Redirect to employer's own ATS. Long repetitive forms: experience dates, education dates/scores, certs, skills, custom questions. Auto-fill is incomplete. Slow and tedious for every application.</p>
+      </div>
+    </div>
+
+    <h3>1.2 The Solution</h3>
+    <p>A <strong>Chrome browser extension</strong> that, on demand, reads the application form on the currently open page and fills it using a <strong>locally stored markdown knowledge base</strong> (the "profile"). Filling is <strong>hybrid</strong>: deterministic rules handle obvious fields; a configurable <strong>LLM</strong> handles ambiguous fields and drafts custom answers. The user always <strong>reviews before submitting</strong> — the extension never submits on the user's behalf.</p>
+
+    <h3>1.3 Value Delivered</h3>
+    <ul>
+      <li>Eliminate repetitive manual entry of experience / education / cert data.</li>
+      <li>One maintained profile, reused across unlimited forms.</li>
+      <li>Multiple tailored profiles for different target roles.</li>
+      <li>Local application history to avoid duplicate applications.</li>
+    </ul>
+  </section>
+
+  <!-- §2 -->
+  <section class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2 class="section-title">Goals & Non-Goals</h2>
+    </div>
+
+    <h3>In Scope</h3>
+    <ul class="goal-list">
+      <li class="in"><span class="tag">G1</span>Fill <strong>generic external ATS / company career forms</strong> (primary value).</li>
+      <li class="in"><span class="tag">G2</span>Tailored adapters for <strong>Workday, Greenhouse, Lever, iCIMS, Taleo</strong>.</li>
+      <li class="in"><span class="tag">G3</span>Support <strong>Bayt.com</strong> forms (English UI in v1).</li>
+      <li class="in"><span class="tag">G4</span>Markdown knowledge base on disk via <strong>File System Access API</strong>.</li>
+      <li class="in"><span class="tag">G5</span>Multiple named profiles with per-application selection.</li>
+      <li class="in"><span class="tag">G6</span>Hybrid field mapping — rules first, LLM fallback.</li>
+      <li class="in"><span class="tag">G7</span>Q&A bank + AI drafting for custom questions.</li>
+      <li class="in"><span class="tag">G8</span>Review-before-submit workflow in a side panel UI.</li>
+      <li class="in"><span class="tag">G9</span>Detect file-upload fields and flag them for manual attachment.</li>
+      <li class="in"><span class="tag">G10</span>Configurable multi-provider LLM layer with ordered fallback chain (default 3).</li>
+      <li class="in"><span class="tag">G11</span>Local application history + duplicate-application warnings.</li>
+    </ul>
+
+    <h3 style="margin-top:24px">Out of Scope (v1)</h3>
+    <ul class="goal-list">
+      <li class="out"><span class="tag">N1</span><strong>LinkedIn Easy Apply.</strong> ToS risk, account risk. Parked for future.</li>
+      <li class="out"><span class="tag">N2</span><strong>Resume PDF/DOCX parsing.</strong> Profile built by paste + AI structure or direct edit.</li>
+      <li class="out"><span class="tag">N3</span><strong>Job-description tailoring.</strong> Answers from profile/Q&A bank only.</li>
+      <li class="out"><span class="tag">N4</span><strong>Auto-submit / mass apply.</strong> User always reviews and submits.</li>
+      <li class="out"><span class="tag">N5</span><strong>Automated file uploads.</strong> Upload fields flagged; user attaches manually.</li>
+      <li class="out"><span class="tag">N6</span><strong>Non-English forms.</strong> English only in v1.</li>
+      <li class="out"><span class="tag">N7</span><strong>Non-Chrome browsers.</strong> Chrome only; Edge trivial add later.</li>
+      <li class="out"><span class="tag">N8</span><strong>Mobile.</strong> Desktop Chrome only.</li>
+      <li class="out"><span class="tag">N9</span><strong>Cloud sync / multi-device.</strong> All data is local.</li>
+      <li class="out"><span class="tag">N10</span><strong>Cover letters.</strong> No generation or storage; handled manually.</li>
+    </ul>
+  </section>
+
+  <!-- §3 -->
+  <section class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2 class="section-title">Primary User & Usage Context</h2>
+    </div>
+    <div class="card">
+      <ul>
+        <li>Single primary user — no multi-tenant or account system.</li>
+        <li>Technically comfortable: can install a dev extension, obtain LLM API keys, edit markdown.</li>
+        <li>Works on desktop Chrome, already authenticated to job sites in their normal session.</li>
+        <li>The extension operates <strong>on the page the user is already viewing</strong> — it does not log in or navigate on the user's behalf.</li>
+        <li>Region: Middle East / Pakistan job market (hence Bayt); v1 form content is English.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- §4 -->
+  <section class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2 class="section-title">Key Decisions (Locked)</h2>
+    </div>
+    <p>Agreed during specification. Considered settled unless the owner revisits them.</p>
+    <table class="dtable">
+      <thead><tr><th>#</th><th>Decision Area</th><th>Choice</th></tr></thead>
+      <tbody>
+        <tr><td>D1</td><td>Host form factor</td><td><strong>Chrome browser extension</strong> (Manifest V3)</td></tr>
+        <tr><td>D2</td><td>Field mapping</td><td><strong>Hybrid:</strong> deterministic rules first, LLM fallback</td></tr>
+        <tr><td>D3</td><td>Submission control</td><td><strong>Fill → user reviews → user submits.</strong> Tool never submits</td></tr>
+        <tr><td>D4</td><td>AI processing</td><td><strong>Configurable per provider;</strong> cloud APIs (user keys)</td></tr>
+        <tr><td>D5</td><td>LLM providers</td><td><strong>Provider-agnostic</strong> layer: OpenAI, Gemini, Anthropic, …</td></tr>
+        <tr><td>D6</td><td>LLM fallback</td><td><strong>Ordered fallback chain,</strong> default 3 providers, supports N</td></tr>
+        <tr><td>D7</td><td>Profile input</td><td><strong>Paste-text → AI structures it</strong> + <strong>direct markdown edit</strong></td></tr>
+        <tr><td>D8</td><td>Custom questions</td><td><strong>Q&A bank + AI drafting</strong> (review, optionally save back)</td></tr>
+        <tr><td>D9</td><td>File uploads</td><td><strong>Detect &amp; flag;</strong> user attaches manually</td></tr>
+        <tr><td>D10</td><td>Knowledge base storage</td><td><strong>Real <code>.md</code> files on disk</strong> via File System Access API</td></tr>
+        <tr><td>D11</td><td>Browser target</td><td><strong>Chrome only</strong> (v1)</td></tr>
+        <tr><td>D12</td><td>Site scope</td><td><strong>Generic ATS forms + known-ATS adapters + Bayt</strong></td></tr>
+        <tr><td>D13</td><td>Trigger &amp; review UI</td><td><strong>Extension icon → side panel</strong></td></tr>
+        <tr><td>D14</td><td>Tech stack</td><td><strong>TypeScript + React + Vite + CRXJS</strong></td></tr>
+        <tr><td>D15</td><td>JD tailoring</td><td><strong>No</strong> — answers from profile/Q&A bank only</td></tr>
+        <tr><td>D16</td><td>Application tracking</td><td><strong>Yes</strong> — local history + duplicate warning</td></tr>
+        <tr><td>D17</td><td>Profiles</td><td><strong>Multiple named profiles</strong></td></tr>
+        <tr><td>D18</td><td>Languages</td><td><strong>English only</strong> (v1)</td></tr>
+        <tr><td>D19</td><td>First ATS adapter</td><td><strong>Workday</strong> first, then Greenhouse/Lever/iCIMS/Taleo/Bayt</td></tr>
+        <tr><td>D20</td><td>Q&A bank scope</td><td><strong>Shared</strong> across all profiles (single <code>qa-bank.md</code>)</td></tr>
+        <tr><td>D21</td><td>Cover letters</td><td><strong>Not stored or generated</strong> in v1</td></tr>
+        <tr><td>D22</td><td>LLM model config</td><td><strong>One model per provider,</strong> used for both mapping and drafting</td></tr>
+        <tr><td>D23</td><td>Autofill threshold</td><td>Auto-include <strong>high</strong>-confidence; <strong>flag</strong> medium/low (configurable)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- §5 -->
+  <section class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2 class="section-title">High-Level Architecture</h2>
+    </div>
+    <p>Chrome MV3 extension composed of cooperating contexts plus an on-disk data folder.</p>
+
+    <div class="arch-diagram">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Chrome Extension Contexts</div>
+      <div class="arch-row">
+        <div class="arch-box accent">
+          <h5>📋 Side Panel (React)</h5>
+          <ul>
+            <li>Profile manager</li>
+            <li>Fill / review table</li>
+            <li>Q&A review</li>
+            <li>Settings & history</li>
+            <li>Folder pick + re-grant</li>
+          </ul>
+        </div>
+        <div style="display:flex;align-items:center;color:var(--muted);font-size:22px;">⇄</div>
+        <div class="arch-box purple">
+          <h5>⚙ Background Service Worker</h5>
+          <ul>
+            <li>Orchestration / state machine</li>
+            <li>LLM provider layer + fallback</li>
+            <li>File I/O (permitted handles)</li>
+            <li>History / dedupe</li>
+            <li>Holds API keys at runtime</li>
+          </ul>
+        </div>
+      </div>
+      <div class="arch-connector">Background ──<span>scripting.executeScript</span>──▶</div>
+      <div class="arch-row">
+        <div class="arch-box green" style="max-width:340px">
+          <h5>📄 Content Script (per active tab)</h5>
+          <ul>
+            <li>DOM field detection</li>
+            <li>Value writing + event dispatch</li>
+            <li>Upload-field flagging</li>
+            <li>ATS adapter hooks</li>
+            <li><strong style="color:var(--red)">No secrets · No network calls</strong></li>
+          </ul>
+        </div>
+        <div style="display:flex;align-items:center;color:var(--muted);font-size:22px;">▼</div>
+        <div class="arch-box" style="max-width:220px;align-self:center">
+          <h5 style="color:var(--muted)">🌐 Job Application Page</h5>
+          <p style="font-size:11.5px;color:var(--muted)">The live form the user is viewing</p>
+        </div>
+      </div>
+      <div class="arch-connector">File System Access API ▼</div>
+      <div class="disk-box">
+        <div>
+          <h5>💾 On-Disk Data Folder</h5>
+          <div class="files">
+            /profiles/*.md &nbsp;·&nbsp; /qa-bank.md<br>
+            /history.json &nbsp;·&nbsp; /settings.json
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);border-left:1px solid #1e5e1e;padding-left:16px">
+          Secrets are <strong style="color:var(--red)">NOT</strong> stored here.<br>
+          API keys → <code>chrome.storage.local</code>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="sub">5.1 Component Responsibilities</h3>
+    <div class="card"><p><strong>Side Panel (React):</strong> all user-facing UI — profile management, fill/review table, Q&A review, settings, history. Opened by clicking the extension icon. Also performs folder picks and permission re-grants (requires user activation — see §5.2).</p></div>
+    <div class="card"><p><strong>Background Service Worker:</strong> the orchestrator. Owns the fill state machine, LLM provider layer + fallback, history/dedupe, and file I/O on already-permitted handles. The only context that holds API keys at runtime. MV3 service workers are ephemeral — see EC-22.</p></div>
+    <div class="card"><p><strong>Content Script:</strong> injected into the active tab on user action. Detects fields, writes values with correct DOM events, flags upload fields, hosts ATS adapters. Holds <strong>no secrets</strong> and makes <strong>no network calls</strong>.</p></div>
+    <div class="card"><p><strong>Options Page:</strong> advanced configuration (provider keys, fallback order, data-folder selection, defaults).</p></div>
+
+    <h3 class="sub">5.2 Why This Shape</h3>
+    <blockquote>
+      <strong>File System Access permission must originate in the side panel.</strong> <code>showDirectoryPicker</code> and <code>requestPermission</code> require <strong>user activation</strong>, which a service worker does not have. The side panel owns folder picks and re-grants. An MV3 service worker <em>can</em> read/write an already-permitted handle from IndexedDB, but cannot raise a permission prompt. The <code>FileStore</code> abstraction (§7.5) hides which context performs I/O.
+    </blockquote>
+    <blockquote>Keeping the content script free of secrets and network access limits the blast radius if a job page is hostile.</blockquote>
+  </section>
+
+  <!-- §6 -->
+  <section class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2 class="section-title">Technology Stack</h2>
+    </div>
+    <table class="stack-table">
+      <thead><tr><th>Layer</th><th>Choice</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Language</td><td><strong>TypeScript</strong> (strict)</td><td>Shared types across all contexts</td></tr>
+        <tr><td>UI</td><td><strong>React 18</strong></td><td>Side panel + options page</td></tr>
+        <tr><td>Build</td><td><strong>Vite + CRXJS plugin</strong></td><td>MV3 bundling, HMR for extension dev</td></tr>
+        <tr><td>Manifest</td><td><strong>Manifest V3</strong></td><td>Service worker, <code>sidePanel</code>, <code>scripting</code></td></tr>
+        <tr><td>State (UI)</td><td>React state + Zustand</td><td>Keep deps minimal</td></tr>
+        <tr><td>Styling</td><td>CSS Modules or Tailwind</td><td>Side panel is narrow; design for it</td></tr>
+        <tr><td>Markdown parse</td><td><code>unified</code>/<code>remark</code> or small custom parser</td><td>Profile &amp; Q&A parsing</td></tr>
+        <tr><td>Storage (data)</td><td><strong>File System Access API</strong></td><td>Markdown + JSON in chosen folder</td></tr>
+        <tr><td>Storage (handles/cache)</td><td><code>chrome.storage.local</code> + IndexedDB</td><td>Persist dir handle + non-secret config</td></tr>
+        <tr><td>LLM SDKs</td><td>Provider REST APIs via <code>fetch</code></td><td>Avoid heavy SDKs; thin adapters</td></tr>
+        <tr><td>Testing</td><td>Vitest (unit) + Playwright (e2e)</td><td>See §19</td></tr>
+        <tr><td>Lint/format</td><td>ESLint + Prettier</td><td></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- §7 -->
+  <section class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2 class="section-title">Data Model & Knowledge Base</h2>
+    </div>
+
+    <h3 class="sub">7.1 Folder Layout</h3>
+    <pre><code>&lt;data-folder&gt;/
+├── profiles/
+│   ├── ml-engineer.md
+│   ├── data-analyst.md
+│   └── ...              # one .md file per named profile
+├── qa-bank.md            # shared Q&amp;A bank (D20)
+├── history.json          # application history
+└── settings.json         # non-secret settings</code></pre>
+    <blockquote><strong>Secrets are NOT stored here.</strong> LLM API keys live in <code>chrome.storage.local</code> (§15.3), never in the plaintext folder the user might sync or share.</blockquote>
+
+    <h3 class="sub">7.2 Profile Markdown Schema</h3>
+    <p>Human-readable markdown with YAML frontmatter and well-known section headings. Parser is <strong>tolerant</strong>: unknown sections are preserved; missing sections are treated as empty.</p>
+    <pre><code>---
+profile_name: ML Engineer
+target_role: Machine Learning Engineer
+updated: 2026-06-03
+---
+
+# Personal Information
+- Full name: &lt;your-full-name&gt;
+- Email: &lt;your-email&gt;
+- Phone: +92-3xx-xxxxxxx
+- Location: City, Country
+- LinkedIn: https://linkedin.com/in/...
+- GitHub: https://github.com/...
+
+# Work Experience
+## Senior ML Engineer — Acme Corp
+- Start: 2022-03
+- End: present          # "present"/"current" => currently employed
+- Employment type: Full-time
+- Highlights:
+  - Did X, improving Y by Z%.
+
+# Education
+## BSc Computer Science — Example University
+- Start: 2015-09
+- End: 2019-06
+- Grade: 3.7/4.0        # stored as written; mapper reformats per field
+
+# Certifications
+## AWS Certified Machine Learning – Specialty
+- Issuer: Amazon Web Services
+- Issued: 2023-05
+- Expires: 2026-05
+
+# Skills
+- Languages: Python, SQL, TypeScript
+- ML: PyTorch, scikit-learn
+- Cloud: AWS, GCP
+
+# Preferences
+- Work authorization: ...
+- Notice period: 1 month
+- Willing to relocate: Yes
+- Salary expectation: ...</code></pre>
+    <p><strong>Date convention:</strong> store as <code>YYYY-MM</code> or <code>YYYY-MM-DD</code>; use <code>present</code>/<code>current</code> for ongoing roles. Mapper reformats to whatever the target field expects (§11.4).</p>
+
+    <h3 class="sub">7.3 Q&A Bank (<code>qa-bank.md</code>)</h3>
+    <p>Single file shared across all profiles (D20). Markdown for human editability.</p>
+    <pre><code>## Are you legally authorized to work in &lt;country&gt;?
+- type: boolean
+- tags: work-authorization, eligibility
+- answer: Yes
+
+## What is your expected salary?
+- type: text
+- tags: salary, compensation
+- answer: Negotiable / market rate for the role
+
+## Why do you want to work here?
+- type: long-text
+- tags: motivation
+- answer: |
+    A reusable, profile-grounded paragraph...</code></pre>
+
+    <h3 class="sub">7.4 Application History (<code>history.json</code>)</h3>
+    <pre><code>{
+  "version": 1,
+  "applications": [{
+    "id": "uuid",
+    "url": "https://jobs.example.com/apply/12345",
+    "url_normalized": "jobs.example.com/apply/12345",
+    "company": "Example Corp",
+    "role": "ML Engineer",
+    "profile_used": "ml-engineer",
+    "filled_at": "2026-06-03T10:15:00Z",
+    "status": "filled",     // filled | submitted-manually | abandoned
+    "fields_filled": 23,
+    "fields_flagged": 4
+  }]
+}</code></pre>
+
+    <h3 class="sub">7.5 Persisting File System Access</h3>
+    <div class="card">
+      <ul>
+        <li>On first run the user picks the data folder (user gesture in the side panel).</li>
+        <li>The <code>FileSystemDirectoryHandle</code> is stored in <strong>IndexedDB</strong> (handles are structured-cloneable; <code>chrome.storage</code> cannot store them).</li>
+        <li>On later sessions: call <code>queryPermission</code>. If not <code>granted</code>, call <code>requestPermission</code> <strong>from the side panel</strong> (needs user activation); show "Reconnect data folder" prompt.</li>
+        <li>All reads/writes go through a <code>FileStore</code> abstraction — caller doesn't know which context does I/O.</li>
+      </ul>
+    </div>
+    <div class="card" style="border-color:var(--yellow)">
+      <h4 style="color:var(--yellow)">⚠ Write Safety (§7.5.1)</h4>
+      <ul>
+        <li><strong>Re-read</strong> the target file immediately before writing.</li>
+        <li>For <strong>append-style</strong> changes (Q&A save-back): append to freshly read content.</li>
+        <li>For <strong>full-rewrite</strong> (profile save from F1.3): show diff/preview against on-disk content; if file changed since load, surface conflict instead of clobbering.</li>
+        <li>Writes SHOULD be atomic (temp file + rename) to avoid half-written state on failure.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Data File Versioning (§7.5.2)</h4>
+      <p><code>history.json</code> and <code>settings.json</code> carry a <code>version</code> field. On load, if the on-disk version is older, run a forward migration (back up as <code>*.bak</code>). An unknown/newer version is treated read-only with a warning.</p>
+    </div>
+  </section>
+
+  <!-- §8 -->
+  <section class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <h2 class="section-title">Functional Requirements</h2>
+    </div>
+    <p style="margin-bottom:20px">MUST/SHOULD/MAY per RFC-2119.</p>
+
+    <div class="req-group">
+      <div class="req-group-title"><span class="rid">F1</span> Knowledge Base Management</div>
+      <div class="req-item must"><span class="rid">F1.1</span>User MUST be able to select/create the on-disk data folder.</div>
+      <div class="req-item must"><span class="rid">F1.2</span>User MUST be able to <strong>create, rename, duplicate, and delete</strong> profiles. Filenames are sanitized slugs; slug collisions de-duplicated (<code>-2</code> suffix). Delete MUST confirm.</div>
+      <div class="req-item must"><span class="rid">F1.3</span>User MUST be able to <strong>paste free text</strong> → LLM structures it → diff/preview → save writes the <code>.md</code>.</div>
+      <div class="req-item must"><span class="rid">F1.4</span>User MUST be able to <strong>edit profile markdown directly</strong> in the side panel and externally (changes picked up on next read).</div>
+      <div class="req-item must"><span class="rid">F1.5</span>Tool MUST validate profile schema and warn on malformed sections <strong>without destroying content</strong>.</div>
+      <div class="req-item must"><span class="rid">F1.6</span>User MUST be able to <strong>select the active profile</strong> per application from the side panel.</div>
+      <div class="req-item must"><span class="rid">F1.7</span>User MUST be able to <strong>view/edit the Q&A bank</strong> in the side panel.</div>
+    </div>
+
+    <div class="req-group">
+      <div class="req-group-title"><span class="rid">F2</span> Field Detection</div>
+      <div class="req-item must"><span class="rid">F2.1</span>On trigger, content script MUST scan the active tab for: <code>&lt;input&gt;</code>, <code>&lt;textarea&gt;</code>, <code>&lt;select&gt;</code>, radio/checkbox groups, <code>contenteditable</code>, and custom widgets (combobox, React-Select, date pickers).</div>
+      <div class="req-item must"><span class="rid">F2.2</span>For each field MUST capture: stable <code>fieldId</code>, visible <strong>label</strong>, <code>name</code>/<code>id</code>/<code>autocomplete</code>, type, options, <code>required</code>, and grouping.</div>
+      <div class="req-item must"><span class="rid">F2.3</span>MUST detect <strong>repeatable sections</strong> and the "add another" control (best-effort).</div>
+      <div class="req-item must"><span class="rid">F2.4</span>MUST detect <strong>file-upload fields</strong> and classify them (resume / cover letter / other).</div>
+      <div class="req-item must"><span class="rid">F2.5</span>MUST detect <strong>multi-step / wizard</strong> forms and the next/continue control (best-effort).</div>
+    </div>
+
+    <div class="req-group">
+      <div class="req-group-title"><span class="rid">F3</span> Hybrid Field Mapping</div>
+      <div class="req-item must"><span class="rid">F3.1</span>Mapper MUST first apply <strong>deterministic rules</strong> (label/attribute/autocomplete heuristics).</div>
+      <div class="req-item must"><span class="rid">F3.2</span>Unmatched fields MUST be sent to the <strong>LLM</strong> with field metadata + relevant profile context.</div>
+      <div class="req-item must"><span class="rid">F3.3</span>Each result MUST carry <strong>source</strong> (<code>rule|profile|qa|llm|blank</code>) and <strong>confidence</strong> (<code>high|medium|low</code>).</div>
+      <div class="req-item must-not"><span class="rid">F3.4</span>Mapper MUST <strong>NEVER fabricate</strong> data not in the profile/Q&A bank. Unknown → <code>blank</code> + flag.</div>
+      <div class="req-item must"><span class="rid">F3.5</span>Values MUST be reformatted to match the target field's expected format.</div>
+    </div>
+
+    <div class="req-group">
+      <div class="req-group-title"><span class="rid">F4</span> Custom Question Handling</div>
+      <div class="req-item must"><span class="rid">F4.1</span>For non-resume questions MUST first try to match a <strong>Q&A bank</strong> entry (rules then LLM semantic match).</div>
+      <div class="req-item must"><span class="rid">F4.2</span>On no match (if AI drafting on) MUST <strong>draft an answer</strong> grounded in profile + bank, flagged medium/low.</div>
+      <div class="req-item must"><span class="rid">F4.3</span>User MUST be able to <strong>edit</strong> any drafted answer and optionally <strong>save it back</strong> to the Q&A bank.</div>
+      <div class="req-item must-not"><span class="rid">F4.4</span>Tool MUST NOT answer with <strong>invented facts</strong> not derivable from the profile; flag for user instead.</div>
+    </div>
+
+    <div class="req-group">
+      <div class="req-group-title"><span class="rid">F5</span> Fill & Review (Side Panel)</div>
+      <div class="req-item must"><span class="rid">F5.1</span>After mapping MUST show a <strong>review table</strong>: label, proposed value (editable), source, confidence, required flag, include/skip toggle.</div>
+      <div class="req-item must"><span class="rid">F5.2</span>Fields MUST be <strong>grouped</strong> to mirror the form (Personal, Experience #1, …).</div>
+      <div class="req-item must"><span class="rid">F5.3</span>User MUST be able to <strong>edit any value</strong> before applying.</div>
+      <div class="req-item must"><span class="rid">F5.4</span><strong>"Apply to page"</strong> MUST write approved values using correct event dispatch (§11.7), reporting per-field success/failure.</div>
+      <div class="req-item must"><span class="rid">F5.5</span>Panel MUST clearly list <strong>flagged items</strong> (blanks, low-confidence, uploads, captcha).</div>
+      <div class="req-item must-not"><span class="rid">F5.6</span>Tool MUST NOT click the site's submit button. MAY offer <strong>"Mark as submitted"</strong> to update history.</div>
+      <div class="req-item must"><span class="rid">F5.7</span>User MUST be able to <strong>re-run</strong> mapping (e.g. after navigating to the next wizard step).</div>
+    </div>
+
+    <div class="req-group">
+      <div class="req-group-title"><span class="rid">F6</span> File-Upload Flagging</div>
+      <div class="req-item must"><span class="rid">F6.1</span>Detected upload fields MUST be surfaced as flagged items with their detected purpose.</div>
+      <div class="req-item must-not"><span class="rid">F6.2</span>Tool MUST NOT set file inputs programmatically.</div>
+    </div>
+
+    <div class="req-group">
+      <div class="req-group-title"><span class="rid">F7</span> Application History & Dedupe</div>
+      <div class="req-item must"><span class="rid">F7.1</span>On apply MUST record an entry in <code>history.json</code>.</div>
+      <div class="req-item must"><span class="rid">F7.2</span>Before/at fill time MUST check for <strong>duplicates</strong> (URL or company+role match) and warn.</div>
+      <div class="req-item must"><span class="rid">F7.3</span>User MUST be able to browse/search history and update status.</div>
+    </div>
+
+    <div class="req-group">
+      <div class="req-group-title"><span class="rid">F8</span> LLM Provider Config & Fallback</div>
+      <div class="req-item must"><span class="rid">F8.1</span>User MUST be able to configure multiple providers with per-provider API key, model, and base URL.</div>
+      <div class="req-item must"><span class="rid">F8.2</span>User MUST be able to define an <strong>ordered fallback chain</strong> (default ≤3; supports N).</div>
+      <div class="req-item must"><span class="rid">F8.3</span>On provider failure MUST transparently try the <strong>next provider</strong> in order.</div>
+      <div class="req-item must"><span class="rid">F8.4</span>If all providers fail MUST show <strong>rules-only results</strong> with LLM-dependent fields flagged.</div>
+      <div class="req-item should"><span class="rid">F8.5</span>User SHOULD be able to <strong>test</strong> each provider's connectivity from settings.</div>
+    </div>
+
+    <div class="req-group">
+      <div class="req-group-title"><span class="rid">F9</span> Settings & Onboarding</div>
+      <div class="req-item must"><span class="rid">F9.1</span>First-run onboarding MUST guide: pick data folder → create first profile → (optionally) add LLM provider. LLM step is optional — rules-only filling works with no provider.</div>
+      <div class="req-item must"><span class="rid">F9.2</span>Settings MUST cover providers/keys, fallback order, default profile, AI drafting on/off, confidence threshold, and data-folder reconnection.</div>
+    </div>
+  </section>
+
+  <!-- §9 -->
+  <section class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <h2 class="section-title">User Flows (Happy Path)</h2>
+    </div>
+
+    <h3 class="sub">9.1 Onboarding / Training</h3>
+    <ol class="flow">
+      <li><div class="flow-num">1</div><div class="flow-body">Install extension → click icon → <strong>side panel opens.</strong></div></li>
+      <li><div class="flow-num">2</div><div class="flow-body">Onboarding prompts: <strong>pick data folder</strong> (File System Access grant).</div></li>
+      <li><div class="flow-num">3</div><div class="flow-body">Create a profile (e.g. "ML Engineer").</div></li>
+      <li><div class="flow-num">4</div><div class="flow-body"><strong>Paste resume text + cert details</strong> → LLM structures it → preview/diff → <strong>Save</strong> writes <code>ml-engineer.md</code>.</div></li>
+      <li><div class="flow-num">5</div><div class="flow-body">Open <strong>Settings</strong> → add LLM provider (key + model) → click <strong>Test.</strong></div></li>
+      <li><div class="flow-num">6</div><div class="flow-body">(Optional) Seed the <strong>Q&A bank</strong> with common answers.</div></li>
+    </ol>
+
+    <h3 class="sub" style="margin-top:28px">9.2 Apply to a Generic External Form</h3>
+    <ol class="flow">
+      <li><div class="flow-num">1</div><div class="flow-body">Navigate to the job's application page in normal browser session.</div></li>
+      <li><div class="flow-num">2</div><div class="flow-body">Click extension icon → side panel opens → <strong>select active profile.</strong></div></li>
+      <li><div class="flow-num">3</div><div class="flow-body">Click <strong>Detect & Map.</strong></div></li>
+      <li><div class="flow-num">4</div><div class="flow-body">Content script detects fields → background runs hybrid mapping → side panel shows <strong>review table</strong> + flagged items list.</div></li>
+      <li><div class="flow-num">5</div><div class="flow-body"><strong>Duplicate check:</strong> if URL/role already applied, a warning banner appears.</div></li>
+      <li><div class="flow-num">6</div><div class="flow-body">Review/edit values, toggle skips, fix flagged items.</div></li>
+      <li><div class="flow-num">7</div><div class="flow-body">Click <strong>"Apply to page"</strong> → values written into live form; per-field results reported.</div></li>
+      <li><div class="flow-num">8</div><div class="flow-body">Visually verify → <strong>attach files manually</strong> → complete captcha → <strong>click site's own submit.</strong></div></li>
+      <li><div class="flow-num">9</div><div class="flow-body">(Optional) Click <strong>"Mark as submitted"</strong> → history updated.</div></li>
+    </ol>
+
+    <h3 class="sub" style="margin-top:28px">9.3 Multi-Step ATS (e.g. Workday)</h3>
+    <p>Same as 9.2, but the form spans steps. After applying step 1 and clicking the site's "Next", the user clicks <strong>Detect & Map</strong> again for the new step. ATS adapters improve reliability where available.</p>
+
+    <h3 class="sub">9.4 Update Profile Later</h3>
+    <p>Open the profile in the side panel (or external editor) → add a new cert/skill (paste-and-structure or direct edit) → save. Next fill uses the updated content.</p>
+  </section>
+
+  <!-- §10 -->
+  <section class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <h2 class="section-title">Data Flow</h2>
+    </div>
+    <div class="card">
+      <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+        <div>
+          <div class="df-layer df-dom">Job Page DOM</div>
+          <div class="df-arrow">▼</div>
+          <div class="df-layer df-bg">Background Worker</div>
+          <div class="df-arrow">▼</div>
+          <div class="df-layer df-panel">Side Panel</div>
+          <div class="df-arrow">▼</div>
+          <div class="df-layer df-bg">Background → Content Script</div>
+          <div class="df-arrow">▼</div>
+          <div class="df-layer df-disk">Disk</div>
+        </div>
+        <div style="padding-top:4px;flex:1;min-width:220px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;padding:8px 0;border-bottom:1px solid var(--border)">(1) content script: detect fields → <code>DetectedField[]</code></div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;padding:8px 0;border-bottom:1px solid var(--border)">(2) load profile + qa-bank<br>(3) rules mapper → resolved + unresolved<br>(4) build LLM request for unresolved fields<br>(5) LLM provider layer (ordered fallback)<br>(6) merge → <code>MappingResult[]</code> with source+confidence</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;padding:8px 0;border-bottom:1px solid var(--border)">(7) render review table + flagged items + dedupe warning<br>(8) user edits/approves</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;padding:8px 0;border-bottom:1px solid var(--border)">(9) write approved values, dispatch DOM events, report results</div>
+          <div style="font-size:12px;color:var(--muted);padding:8px 0">(10) append history entry; optional save-back to qa-bank</div>
+        </div>
+      </div>
+    </div>
+    <blockquote><strong>What is sent to the LLM:</strong> only field labels/metadata and the <strong>relevant</strong> profile/Q&A snippets — never the page's job description, never API keys, never the entire folder. Sent over HTTPS to the user-configured provider.</blockquote>
+  </section>
+
+  <!-- §11 -->
+  <section class="section" id="s11">
+    <div class="section-header">
+      <div class="section-num">11</div>
+      <h2 class="section-title">Field Detection & Mapping Strategy</h2>
+    </div>
+
+    <h3 class="sub">11.1 Detection</h3>
+    <div class="card">
+      <ul>
+        <li>Walk DOM for fillable elements. Skip hidden/disabled/<code>type=hidden</code> and honeypots.</li>
+        <li><strong>Field identity:</strong> each field gets a generated stable <code>fieldId</code>. Content script keeps an in-memory <code>fieldId → live element</code> map. Apply-to-page uses <code>fieldId</code> (not CSS selector) — re-querying at write time per EC-14.</li>
+        <li>Label priority: <code>&lt;label for&gt;</code> → wrapping <code>&lt;label&gt;</code> → <code>aria-labelledby</code> → <code>aria-label</code> → preceding text → <code>placeholder</code> → <code>name</code>/<code>id</code> (de-camelCased).</li>
+        <li>Record <code>autocomplete</code> tokens — high-signal for rules.</li>
+      </ul>
+    </div>
+
+    <h3 class="sub">11.2 Rules Layer (Deterministic, Runs First)</h3>
+    <p>Match on <code>autocomplete</code> tokens, then normalized label/<code>name</code>/<code>id</code> against a synonym dictionary. Output high-confidence mappings; everything else passes to LLM.</p>
+
+    <h3 class="sub">11.3 LLM Layer (Fallback)</h3>
+    <div class="card">
+      <ul>
+        <li><strong>Input:</strong> unresolved fields (label, type, options, group) + compact profile context + relevant Q&A entries.</li>
+        <li><strong>Task:</strong> return per field a value drawn <strong>only</strong> from provided context + confidence; or <code>blank</code> if unknown.</li>
+        <li><strong>Output:</strong> structured JSON (Appendix C) validated before use; invalid output → one repair retry → <code>blank</code>+flag.</li>
+      </ul>
+    </div>
+
+    <h3 class="sub">11.4 Value Formatting</h3>
+    <div class="card-grid">
+      <div class="card"><h4>📅 Dates</h4><p>Detect expected format from <code>type=month/date</code>, placeholder, or adjacent split selects. Reformat stored <code>YYYY-MM</code> accordingly. <code>present</code>/<code>current</code> → "currently work here" checkbox when available.</p></div>
+      <div class="card"><h4>📋 Selects/Radios</h4><p>Fuzzy-match stored value to closest available option (synonym table, e.g. "Bachelor's" ↔ "BSc" ↔ "Undergraduate"). No confident match → flag.</p></div>
+    </div>
+
+    <h3 class="sub">11.7 Writing Values into Live Forms (Critical)</h3>
+    <blockquote><strong>Modern SPA forms ignore naïve <code>element.value = x</code>.</strong> The content script MUST use native setters and dispatch the right events.</blockquote>
+    <div class="card">
+      <ul>
+        <li><strong>Text inputs/textareas:</strong> set value via native setter (<code>Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set</code>) then dispatch <code>input</code> and <code>change</code> events (bubbling) + <code>focus</code>/<code>blur</code> where needed.</li>
+        <li><strong><code>&lt;select&gt;</code>:</strong> set <code>value</code>/<code>selectedIndex</code> and dispatch <code>change</code>.</li>
+        <li><strong>Checkboxes/radios:</strong> set <code>checked</code> and dispatch <code>click</code>/<code>change</code>.</li>
+        <li><strong>Custom comboboxes:</strong> simulate <code>focus</code> → type → wait for option list → select via click/keyboard. Inherently fragile; failures reported per-field, not silently dropped.</li>
+        <li>Never write to disabled/readonly fields. Respect <code>maxlength</code>.</li>
+      </ul>
+    </div>
+
+    <h3 class="sub">11.8 ATS Adapters</h3>
+    <p>An adapter interface lets platform-specific modules <strong>override</strong> (not replace) detection, label-resolution, repeatable-section handling, and value-writing for Workday, Greenhouse, Lever, iCIMS, Taleo, and Bayt. Selected by URL/DOM fingerprint; absence falls back to the generic engine.</p>
+  </section>
+
+  <!-- §12 -->
+  <section class="section" id="s12">
+    <div class="section-header">
+      <div class="section-num">12</div>
+      <h2 class="section-title">LLM Provider Layer</h2>
+    </div>
+
+    <h3 class="sub">12.1 Abstraction</h3>
+    <pre><code>interface LLMProvider {
+  id: string;   // "openai" | "gemini" | "anthropic" | "custom"
+  name: string;
+  complete(req: LLMRequest): Promise&lt;LLMResponse&gt;;
+}</code></pre>
+    <div class="card">
+      <ul>
+        <li>Thin adapters call provider REST endpoints via <code>fetch</code> — no heavy SDKs.</li>
+        <li>Normalize to common request (system + user prompt, JSON schema hint, low temperature) and response (text/JSON, token usage, error class).</li>
+        <li>A <strong>"custom" OpenAI-compatible</strong> provider covers self-hosted gateways and future local models — no new code required.</li>
+        <li><strong>One model per provider (D22):</strong> single model used for both mapping and drafting. Default temperature: low. No separate model fields in v1.</li>
+      </ul>
+    </div>
+
+    <h3 class="sub">12.2 Fallback Chain</h3>
+    <div class="card">
+      <ul>
+        <li>Config: ordered list of <code>providerId</code>s, default length 3, supports N. Provider model/key/baseUrl come from per-provider config (§18) — the chain holds only the order.</li>
+        <li>Try provider[0]; on <strong>any</strong> failure advance to provider[1], etc.</li>
+        <li><strong>Retryable:</strong> network error, 429, 5xx, timeout (30s), safety refusal, malformed output after one repair.</li>
+        <li><strong>Config error (401/403):</strong> also advance to next provider <em>and</em> surface bad-key state in Settings (EH-3).</li>
+        <li>All fail → rules-only result + flagged fields + error toast (EH-1).</li>
+      </ul>
+    </div>
+
+    <h3 class="sub">12.3 Cost & Token Control</h3>
+    <p>Batch unresolved fields into as few calls as practical. Send compact profile context (only relevant sections). Expose token usage in debug log; respect a configurable max field batch size.</p>
+  </section>
+
+  <!-- §13 -->
+  <section class="section" id="s13">
+    <div class="section-header">
+      <div class="section-num">13</div>
+      <h2 class="section-title">Edge Cases</h2>
+    </div>
+    <table class="etable">
+      <thead><tr><th>ID</th><th>Edge Case</th><th>Expected Handling</th></tr></thead>
+      <tbody>
+        <tr><td>EC-1</td><td>No fillable fields detected</td><td>Inform user; offer re-scan</td></tr>
+        <tr><td>EC-2</td><td>Form inside cross-origin <strong>iframe</strong></td><td>Same-origin: traverse. Cross-origin: inform user, can't fill</td></tr>
+        <tr><td>EC-3</td><td><strong>Shadow DOM</strong> components</td><td>Traverse open roots; closed roots → flag unfillable</td></tr>
+        <tr><td>EC-4</td><td>Multi-step wizard</td><td>Fill current step; prompt user to advance and re-run</td></tr>
+        <tr><td>EC-5</td><td>Fewer repeatable blocks than entries</td><td>Fill existing; optionally add blocks; otherwise flag remainder</td></tr>
+        <tr><td>EC-6</td><td>Custom date pickers</td><td>Try typing; attempt picker; else flag</td></tr>
+        <tr><td>EC-7</td><td>Split date selects (month + year)</td><td>Map each sub-field via §11.4</td></tr>
+        <tr><td>EC-8</td><td>Select option not present</td><td>Fuzzy-match; if none → blank + flag with available options</td></tr>
+        <tr><td>EC-9</td><td>Value exceeds <code>maxlength</code></td><td>Truncate to limit; flag that it was truncated</td></tr>
+        <tr><td>EC-10</td><td>Required field with no profile data</td><td>Leave blank; flag prominently as required-unfilled</td></tr>
+        <tr><td>EC-11</td><td>Fact not in profile (e.g. exact years with tool X)</td><td>Do <strong>not</strong> fabricate; flag for user (F4.4)</td></tr>
+        <tr><td>EC-12</td><td>Duplicate application</td><td>Warn before/at fill; user may proceed</td></tr>
+        <tr><td>EC-13</td><td>Page navigates/reloads mid-flow</td><td>Detect via content-script lifecycle; invalidate stale mappings; prompt re-scan</td></tr>
+        <tr><td>EC-14</td><td>DOM mutates after detection</td><td>Re-query at write time; if element gone → per-field failure</td></tr>
+        <tr><td>EC-15</td><td><strong>Captcha</strong> present</td><td>Detect; never bypass; flag for manual completion</td></tr>
+        <tr><td>EC-16</td><td>Login wall / session expired</td><td>Detect; inform user to log in; do not handle credentials</td></tr>
+        <tr><td>EC-17</td><td>Anti-bot / rate-limit page</td><td>Stop; inform user; do nothing evasive</td></tr>
+        <tr><td>EC-18</td><td>Honeypot/hidden trap fields</td><td>Skip; never fill hidden/off-screen decoys</td></tr>
+        <tr><td>EC-19</td><td>File System Access permission revoked</td><td>Prompt "Reconnect data folder"</td></tr>
+        <tr><td>EC-20</td><td>Profile markdown malformed</td><td>Parse leniently; warn; never overwrite/lose content</td></tr>
+        <tr><td>EC-21</td><td>Large profile (many certs/experiences)</td><td>Send only compact relevant context to LLM</td></tr>
+        <tr><td>EC-22</td><td><strong>MV3 service worker terminated</strong> mid-operation</td><td>Resumable/idempotent ops; persist in-flight state; side panel can re-trigger</td></tr>
+        <tr><td>EC-23</td><td>Very long form → many LLM fields</td><td>Batch + show progress; allow partial review before all done</td></tr>
+        <tr><td>EC-24</td><td>RTL/Arabic content (out of v1 scope)</td><td>Detect non-English; inform user; don't mis-fill</td></tr>
+        <tr><td>EC-25</td><td>Numeric/locale format mismatch</td><td>Pass through as stored; flag if field pattern rejects it</td></tr>
+        <tr><td>EC-26</td><td>Side panel closed mid-review</td><td>Preserve mapping state so reopening restores it (within session)</td></tr>
+        <tr><td>EC-27</td><td>Multiple forms on one page</td><td>Detect most likely form (most fields/nearest submit); let user switch</td></tr>
+        <tr><td>EC-28</td><td>Profile edited externally during session</td><td>Re-read from disk at fill time</td></tr>
+        <tr><td>EC-29</td><td>User switches tabs while panel is open</td><td>Bind session to originating tab id; warn + require re-detect if tab differs at apply time</td></tr>
+        <tr><td>EC-30</td><td>External edit changed file between load and save</td><td>Re-read before write; surface conflict instead of clobbering</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- §14 -->
+  <section class="section" id="s14">
+    <div class="section-header">
+      <div class="section-num">14</div>
+      <h2 class="section-title">Error Handling</h2>
+    </div>
+    <table class="etable">
+      <thead><tr><th>ID</th><th>Condition</th><th>Behaviour</th><th>User Feedback</th></tr></thead>
+      <tbody>
+        <tr><td>EH-1</td><td>All LLM providers fail</td><td>Rules-only mappings; flag LLM fields</td><td>"AI unavailable — filled basics only; N fields need you." + retry</td></tr>
+        <tr><td>EH-2</td><td>Single provider fails (retryable)</td><td>Silently fall to next in chain</td><td>Debug log entry only</td></tr>
+        <tr><td>EH-3</td><td>Invalid/expired API key (401/403)</td><td>Mark provider unhealthy; try next</td><td>Settings shows provider error; non-blocking toast</td></tr>
+        <tr><td>EH-4</td><td>LLM returns malformed JSON</td><td>One repair retry; then <code>blank</code>+flag</td><td>Affected fields flagged "couldn't map"</td></tr>
+        <tr><td>EH-5</td><td>Content script injection blocked</td><td>Abort with explanation</td><td>"Can't run on this page."</td></tr>
+        <tr><td>EH-6</td><td>File read/write failure</td><td>Abort write; keep prior data intact</td><td>"Couldn't save — folder access lost?" + reconnect</td></tr>
+        <tr><td>EH-7</td><td>Data folder not connected</td><td>Block features needing it</td><td>Onboarding/reconnect prompt</td></tr>
+        <tr><td>EH-8</td><td>Field write fails (element gone/disabled)</td><td>Report per-field failure; continue others</td><td>Per-field ✗ in review table</td></tr>
+        <tr><td>EH-9</td><td>Network offline</td><td>Skip LLM (EH-1 path); rules still run</td><td>"Offline — basics only."</td></tr>
+        <tr><td>EH-10</td><td>Rate-limited across all providers</td><td>EH-1 path</td><td>"Rate-limited — try again shortly."</td></tr>
+        <tr><td>EH-11</td><td>Per-call LLM timeout (30s)</td><td>Treat as retryable (EH-2/EH-1)</td><td>Progress indicator times out gracefully</td></tr>
+        <tr><td>EH-12</td><td>Profile parse error</td><td>Lenient parse; warn; proceed with what parsed</td><td>"Profile has issues in section X."</td></tr>
+        <tr><td>EH-13</td><td>Unexpected/uncaught error</td><td>Fail safe; never auto-submit; never corrupt files; log</td><td>Generic error toast + "report details" (local log)</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:24px">Global Safety Invariants</h3>
+    <ul class="invariants">
+      <li>The tool MUST NEVER click a site's submit button (D3).</li>
+      <li>The tool MUST NEVER write fabricated factual data (F3.4/F4.4).</li>
+      <li>The tool MUST NEVER attempt captcha/anti-bot evasion (EC-15/EC-17/§16).</li>
+      <li>The tool MUST NEVER overwrite user files destructively on error (EH-6/EH-12).</li>
+    </ul>
+  </section>
+
+  <!-- §15 -->
+  <section class="section" id="s15">
+    <div class="section-header">
+      <div class="section-num">15</div>
+      <h2 class="section-title">Security & Privacy</h2>
+    </div>
+    <div class="sec-item"><span class="sec-num">15.1</span><div><strong>Local-first.</strong> All profile, Q&A, and history data stays on the user's disk. No cloud sync, no telemetry, no analytics, no external service other than the user-configured LLM providers.</div></div>
+    <div class="sec-item"><span class="sec-num">15.2</span><div><strong>Minimal LLM exposure.</strong> Only field metadata + relevant profile/Q&A snippets are sent over HTTPS. The job description is NOT sent (D15). PII transit to the chosen provider is disclosed in onboarding.</div></div>
+    <div class="sec-item"><span class="sec-num">15.3</span><div><strong>Secret storage.</strong> API keys live in <code>chrome.storage.local</code> (sandboxed), never in the data folder, never in the content script. Keys are only used in the background worker. Provide "clear keys" action. Document that <code>chrome.storage.local</code> is not encrypted at rest; offer an opt-in session-only key mode.</div></div>
+    <div class="sec-item"><span class="sec-num">15.4</span><div><strong>Content-script isolation.</strong> The content script holds no secrets and makes no network requests — only reads/writes the DOM on user action.</div></div>
+    <div class="sec-item"><span class="sec-num">15.5</span><div><strong>Least privilege.</strong> Use <code>activeTab</code> + on-demand <code>scripting.executeScript</code> for generic sites. Request <code>host_permissions</code> only for known-ATS adapter domains. No broad <code>&lt;all_urls&gt;</code> auto-injection.</div></div>
+    <div class="sec-item"><span class="sec-num">15.6</span><div><strong>No credential handling.</strong> The tool never reads, stores, or types login credentials — relies on the user's existing session.</div></div>
+    <div class="sec-item"><span class="sec-num">15.7</span><div><strong>Data portability/erasure.</strong> Data is plain files — the user can back up, move, or delete freely. Provide an in-app "delete all local data" that also clears keys and history.</div></div>
+  </section>
+
+  <!-- §16 -->
+  <section class="section" id="s16">
+    <div class="section-header">
+      <div class="section-num">16</div>
+      <h2 class="section-title">Legal / Terms-of-Service</h2>
+    </div>
+    <div class="card"><p><strong>Assistive, not autonomous.</strong> The tool fills the form the user is already viewing and stops. It does not crawl, scrape at scale, mass-apply, navigate autonomously, or evade anti-automation measures.</p></div>
+    <div class="card"><p><strong>LinkedIn excluded (N1).</strong> LinkedIn's ToS restrict automated interaction; Easy Apply automation is intentionally out of scope to protect the user's account.</p></div>
+    <div class="card"><p><strong>Respect site terms.</strong> Known-ATS adapters operate within normal user interaction patterns. The tool must never bypass captchas/anti-bot systems.</p></div>
+    <div class="card"><p><strong>Accuracy is the user's responsibility.</strong> The user reviews every value before submitting; the tool never fabricates facts. A disclaimer in onboarding states the user is responsible for the truthfulness of submitted data.</p></div>
+  </section>
+
+  <!-- §17 -->
+  <section class="section" id="s17">
+    <div class="section-header">
+      <div class="section-num">17</div>
+      <h2 class="section-title">Permissions (Manifest V3)</h2>
+    </div>
+    <table class="dtable">
+      <thead><tr><th>Permission</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td><code>sidePanel</code></td><td>Primary UI / review surface (D13)</td></tr>
+        <tr><td><code>scripting</code></td><td>Inject content script on user action</td></tr>
+        <tr><td><code>activeTab</code></td><td>Access current tab on user gesture without broad host perms</td></tr>
+        <tr><td><code>storage</code></td><td>Persist non-secret config + API keys (<code>chrome.storage.local</code>) + dir-handle bookkeeping</td></tr>
+        <tr><td><code>host_permissions</code> (scoped)</td><td>Only for known-ATS adapter domains (Workday/Greenhouse/Lever/iCIMS/Taleo/Bayt)</td></tr>
+      </tbody>
+    </table>
+    <blockquote>The <strong>File System Access API</strong> needs <strong>no manifest permission</strong> but requires a user gesture. Avoid <code>&lt;all_urls&gt;</code> auto-injection — prefer on-demand injection for generic career sites.</blockquote>
+  </section>
+
+  <!-- §18 -->
+  <section class="section" id="s18">
+    <div class="section-header">
+      <div class="section-num">18</div>
+      <h2 class="section-title">Settings Reference</h2>
+    </div>
+    <p><code>settings.json</code> (non-secret) + <code>chrome.storage.local</code> (secrets):</p>
+    <div class="card">
+      <ul>
+        <li><strong>Data folder:</strong> connected handle status; reconnect action.</li>
+        <li><strong>Profiles:</strong> list; default/active profile.</li>
+        <li><strong>LLM providers:</strong> array of <code>{ id, name, model, baseUrl }</code> — one model per provider (D22); key in <code>chrome.storage.local</code>. Ships with empty model strings + "Test" action.</li>
+        <li><strong>Fallback chain:</strong> ordered list of provider ids (default ≤3, supports N).</li>
+        <li><strong>AI drafting:</strong> on/off (F4.2).</li>
+        <li><strong>Autofill behaviour:</strong> confidence threshold — default auto-include <code>high</code>, flag <code>medium</code>/<code>low</code> (D23); repeatable-section auto-add (default off).</li>
+        <li><strong>Dedupe:</strong> sensitivity window; significant-query-param allowlist.</li>
+        <li><strong>Key persistence mode:</strong> persisted vs session-only (§15.3).</li>
+        <li><strong>Per-call LLM timeout</strong> and <strong>max field batch size</strong> (§12.3).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- §19 -->
+  <section class="section" id="s19">
+    <div class="section-header">
+      <div class="section-num">19</div>
+      <h2 class="section-title">Testing & Acceptance Criteria</h2>
+    </div>
+
+    <h3 class="sub">19.1 Unit Tests (Vitest)</h3>
+    <div class="card"><ul>
+      <li>Profile parser: valid, partial, malformed inputs (lenient, non-destructive).</li>
+      <li>Q&A parser and matcher (tags/fuzzy).</li>
+      <li>Rules mapper: synonym/autocomplete coverage.</li>
+      <li>Value formatters: date reformats, split selects, option fuzzy-match, maxlength.</li>
+      <li>LLM response validation + repair-retry.</li>
+      <li>Fallback chain: each error class routes correctly; all-fail → rules-only.</li>
+      <li>URL normalization / dedupe.</li>
+    </ul></div>
+
+    <h3 class="sub">19.2 E2E Tests (Playwright on Fixture Pages)</h3>
+    <div class="card"><ul>
+      <li>Fixture forms: plain, React controlled, split-date, custom combobox, multi-step wizard, repeatable sections, file-upload, captcha placeholder, iframe, shadow-DOM.</li>
+      <li>Assert correct detection, value writing <strong>with proper event dispatch</strong> (React state actually updates), flagging, and that <strong>submit is never clicked</strong>.</li>
+      <li>Adapter smoke tests against saved DOM snapshots of each ATS (no live network).</li>
+    </ul></div>
+
+    <h3 class="sub">19.3 Acceptance Criteria</h3>
+    <div class="card">
+      <table class="etable" style="margin:0">
+        <thead><tr><th>ID</th><th>Criterion</th></tr></thead>
+        <tbody>
+          <tr><td>AC-1</td><td>≥90% of standard fields (name/email/phone/links/title/company) fill correctly via <strong>rules alone</strong>.</td></tr>
+          <tr><td>AC-2</td><td>A React controlled input retains the written value after blur (event dispatch verified).</td></tr>
+          <tr><td>AC-3</td><td>An unknown required field is left blank and <strong>flagged</strong>, never fabricated.</td></tr>
+          <tr><td>AC-4</td><td>With primary provider forced to fail, mapping completes via next provider; all failing → rules-only + flags.</td></tr>
+          <tr><td>AC-5</td><td>The tool never triggers the fixture form's submit handler.</td></tr>
+          <tr><td>AC-6</td><td>Re-running on a duplicate URL shows the duplicate warning.</td></tr>
+          <tr><td>AC-7</td><td>Editing the profile <code>.md</code> externally is reflected on the next fill.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- §20 -->
+  <section class="section" id="s20">
+    <div class="section-header">
+      <div class="section-num">20</div>
+      <h2 class="section-title">Resolved Decisions & Defaults</h2>
+    </div>
+    <p>All questions are resolved. No blocking decisions remain for implementation.</p>
+    <div class="r-item"><span class="rid">R1</span><div>API keys persisted in <code>chrome.storage.local</code> by default, with opt-in <strong>session-only</strong> mode for higher security.</div></div>
+    <div class="r-item"><span class="rid">R2</span><div>Q&A bank is a <strong>single file shared across all profiles</strong> (D20).</div></div>
+    <div class="r-item"><span class="rid">R3</span><div>Preferences (salary, notice, relocation, work auth) live in the profile AND seed Q&A answers; Q&A bank holds canonical question phrasings for matching.</div></div>
+    <div class="r-item"><span class="rid">R4</span><div>Fallback chain default length <strong>3</strong>; UI allows adding more.</div></div>
+    <div class="r-item"><span class="rid">R5</span><div>Repeatable-section auto-adding is <strong>off by default</strong> (flag remainder); user can enable in settings.</div></div>
+    <div class="r-item"><span class="rid">R6</span><div>Custom/OpenAI-compatible provider is the path for any future local model; no separate local-LLM runtime in v1.</div></div>
+    <div class="r-item"><span class="rid">R7</span><div>Application <code>status</code> is <strong>mostly user-marked</strong> — tool cannot reliably detect the site's own submit click.</div></div>
+    <div class="r-item"><span class="rid">R8</span><div>First ATS adapter: <strong>Workday,</strong> then Greenhouse/Lever/iCIMS/Taleo/Bayt.</div></div>
+    <div class="r-item"><span class="rid">R9</span><div><strong>One model per provider</strong>, both mapping and drafting; low temperature default. Model strings ship empty with "Test" action.</div></div>
+    <div class="r-item"><span class="rid">R10</span><div>Cover letters are <strong>not stored or generated</strong> in v1.</div></div>
+    <div class="r-item"><span class="rid">R11</span><div>Autofill threshold: auto-include <code>high</code>-confidence, flag <code>medium</code>/<code>low</code>; configurable.</div></div>
+    <div class="card" style="margin-top:16px;border-color:var(--muted)">
+      <h4 style="color:var(--muted)">Notes for the Implementer</h4>
+      <ul>
+        <li>Provider model strings change over time — ship empty with inline help rather than hard-coded names that may be retired.</li>
+        <li>Workday adapter is the canonical hard case — design generic engine interfaces so adapters <strong>override</strong> core logic, not replace it.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- §21 -->
+  <section class="section" id="s21">
+    <div class="section-header">
+      <div class="section-num">21</div>
+      <h2 class="section-title">Phased Roadmap</h2>
+    </div>
+    <p style="margin-bottom:20px">See the <a href="#sDP">Dev Plan section</a> for full task breakdowns, file lists, interface definitions, and per-task exit gates.</p>
+    <ul class="roadmap">
+      <li class="phase">
+        <div class="phase-badge p0">Phase 0</div>
+        <div class="phase-body">
+          <strong>Foundations <span style="color:var(--muted);font-weight:400;font-size:12px">P0-T1 … P0-T5</span></strong>
+          <ul>
+            <li>Extension skeleton (MV3, side panel, background, content script), TS types</li>
+            <li>Build/dev loop (Vite/CRXJS), <code>FileStore</code> (atomic writes, write-safety)</li>
+            <li>Settings service (non-secret JSON + <code>chrome.storage.local</code> secrets)</li>
+            <li>Typed message bus (background ↔ panel ↔ content)</li>
+          </ul>
+          <div class="exit">Exit gate: <code>npm run build</code> clean; extension loads; side panel opens.</div>
+        </div>
+      </li>
+      <li class="phase">
+        <div class="phase-badge p1">Phase 1</div>
+        <div class="phase-body">
+          <strong>MVP — Generic Engine <span style="color:var(--muted);font-weight:400;font-size:12px">P1-T1 … P1-T10</span></strong>
+          <ul>
+            <li>Profile parser, Q&A parser, history service</li>
+            <li>Content script: field detector (all types, shadow DOM, iframes, upload classification)</li>
+            <li>Content script: value writer (native setter + correct SPA event dispatch)</li>
+            <li>Rules mapper + value formatter (dates, selects, fuzzy match)</li>
+            <li>Background orchestrator: detect → map → apply → history cycle</li>
+            <li>Side panel UI: profile selector/editor, review table, flagged items, history view</li>
+            <li>Fixture HTML forms for E2E testing</li>
+            <li><strong>No LLM yet</strong> — rules-only filling</li>
+          </ul>
+          <div class="exit">Exit gate: AC-1, AC-2, AC-3, AC-5, AC-6, AC-7 pass on fixtures.</div>
+        </div>
+      </li>
+      <li class="phase">
+        <div class="phase-badge p2">Phase 2</div>
+        <div class="phase-body">
+          <strong>LLM Layer <span style="color:var(--muted);font-weight:400;font-size:12px">P2-T1 … P2-T6</span></strong>
+          <ul>
+            <li>LLM provider abstraction + adapters: OpenAI, Gemini, Anthropic, Custom (OpenAI-compatible)</li>
+            <li>Ordered fallback chain with retryable / config-error classification</li>
+            <li>LLM field mapper (prompt construction, context compaction, JSON validation + repair retry)</li>
+            <li>Q&A bank matcher (rule → LLM semantic → AI draft, with save-back)</li>
+            <li>Profile paste-to-structure UI with diff preview</li>
+            <li>Provider Test / health UI in settings</li>
+          </ul>
+          <div class="exit">Exit gate: AC-4 passes; Q&A draft + save-back works; all-providers-fail shows rules-only + toast.</div>
+        </div>
+      </li>
+      <li class="phase">
+        <div class="phase-badge p3">Phase 3</div>
+        <div class="phase-body">
+          <strong>ATS Adapters & Robustness <span style="color:var(--muted);font-weight:400;font-size:12px">P3-T1 … P3-T7</span></strong>
+          <ul>
+            <li>Adapter interface (override hooks: detectFields, resolveLabel, writeField, addRepeatableBlock)</li>
+            <li><strong>Workday adapter first</strong> (D19): <code>data-automation-id</code> keys, date-picker keyboard sim, MutationObserver settle</li>
+            <li>Greenhouse, Lever, iCIMS, Taleo, Bayt adapters</li>
+            <li>Shadow DOM nested traversal + same-/cross-origin iframe hardening</li>
+            <li>Date-picker + combobox robustness improvements</li>
+            <li>MV3 service worker resumability (idempotent ops, EC-22)</li>
+            <li>Repeatable-section auto-add (behind setting, default off)</li>
+          </ul>
+          <div class="exit">Exit gate: Workday snapshot test ≥85% fields; all adapter smoke tests pass; EC-22 resumability test passes.</div>
+        </div>
+      </li>
+      <li class="phase">
+        <div class="phase-badge p4">Phase 4</div>
+        <div class="phase-body">
+          <strong>Polish & Productionisation <span style="color:var(--muted);font-weight:400;font-size:12px">P4-T1 … P4-T5</span></strong>
+          <ul>
+            <li>First-run onboarding wizard (folder → profile → LLM → disclaimer)</li>
+            <li>Full settings UX (providers, fallback chain, fill behaviour, security, data management)</li>
+            <li>History browser (search, filter, status update)</li>
+            <li>Debug log with key redaction + download</li>
+            <li>Production build (<code>npm run build</code> → <code>dist/</code> loadable in Chrome)</li>
+          </ul>
+          <div class="exit">Exit gate: all AC-1–AC-7 pass on production build.</div>
+        </div>
+      </li>
+      <li class="phase">
+        <div class="phase-badge future">Future</div>
+        <div class="phase-body">
+          <strong>Parked (post-v1)</strong>
+          <ul>
+            <li>LinkedIn Easy Apply module (ToS review required)</li>
+            <li>Multilingual/RTL support (Bayt Arabic UI)</li>
+            <li>Edge/Firefox (FileStore export/import fallback)</li>
+            <li>JD-aware tailoring + cover-letter generation</li>
+            <li>PDF/DOCX resume import</li>
+            <li>Chrome Web Store distribution</li>
+          </ul>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Dev Plan -->
+  <section class="section" id="sDP">
+    <div class="section-header">
+      <div class="section-num" style="background:#1a2540;color:#60a5fa;font-size:10px">DP</div>
+      <h2 class="section-title">Development Plan</h2>
+    </div>
+    <p style="margin-bottom:8px">Full task breakdown for each phase. Each task lists the files to create, interfaces to implement, and an exit gate a coding assistant can verify. Complete tasks in order within a phase; phases are sequential.</p>
+    <blockquote style="margin-bottom:24px">The canonical source is <strong>DEVPLAN.md</strong>. This section is a visual summary.</blockquote>
+
+    <!-- Phase 0 -->
+    <h3 style="color:#8892a4;margin-bottom:14px">Phase 0 — Foundations</h3>
+    <div class="dp-tasks">
+      <div class="dp-task">
+        <div class="dp-tid p0t">P0-T1</div>
+        <div class="dp-body">
+          <div class="dp-title">Project scaffold & build system</div>
+          <div class="dp-desc">Initialise monorepo with Vite + CRXJS. Working <code>manifest.json</code>. Extension must load in Chrome without errors.</div>
+          <div class="dp-files">
+            <span class="file-tag">package.json</span><span class="file-tag">tsconfig.json</span><span class="file-tag">vite.config.ts</span><span class="file-tag">manifest.json</span>
+            <span class="file-tag">src/background/index.ts</span><span class="file-tag">src/content/index.ts</span><span class="file-tag">src/panel/index.tsx</span><span class="file-tag">src/options/index.tsx</span><span class="file-tag">src/shared/types.ts</span>
+          </div>
+          <div class="dp-gate">Exit: <code>npm run dev</code> builds; extension loads; side panel shows "Job Form Filler".</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p0t">P0-T2</div>
+        <div class="dp-body">
+          <div class="dp-title">Shared type definitions</div>
+          <div class="dp-desc">Define all core TypeScript interfaces in <code>shared/types.ts</code>. Types only — no implementation. Includes: <code>DetectedField</code>, <code>MappingResult</code>, <code>ParsedProfile</code>, <code>QAEntry</code>, <code>ApplicationRecord</code>, <code>Message</code>.</div>
+          <div class="dp-files"><span class="file-tag">src/shared/types.ts</span></div>
+          <div class="dp-gate">Exit: <code>tsc --noEmit</code> passes with zero errors across all contexts.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p0t">P0-T3</div>
+        <div class="dp-body">
+          <div class="dp-title">FileStore abstraction</div>
+          <div class="dp-desc">Single abstraction over File System Access API. Atomic writes (temp + rename). Write-safety: re-read before write. Folder handle persisted in IndexedDB. <code>requestPermission</code> only from panel context (§5.2).</div>
+          <div class="dp-files"><span class="file-tag">src/panel/filestore.ts</span></div>
+          <div class="dp-gate">Exit: unit tests pass for atomic write rollback, roundtrip, reconnect returning false from worker context.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p0t">P0-T4</div>
+        <div class="dp-body">
+          <div class="dp-title">Settings & secret storage</div>
+          <div class="dp-desc"><code>SettingsService</code> reads/writes <code>settings.json</code> (non-secret) and <code>chrome.storage.local</code> (API keys). Ships with sensible defaults. Session-only key mode supported.</div>
+          <div class="dp-files"><span class="file-tag">src/shared/settings.ts</span></div>
+          <div class="dp-gate">Exit: unit tests pass for defaults, roundtrip, key set/get/clear.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p0t">P0-T5</div>
+        <div class="dp-body">
+          <div class="dp-title">Message bus</div>
+          <div class="dp-desc">Typed wrapper over <code>chrome.runtime.sendMessage</code> / <code>chrome.tabs.sendMessage</code>. All cross-context calls type-safe. <code>{ ok, data }</code> / <code>{ ok, error }</code> envelope.</div>
+          <div class="dp-files"><span class="file-tag">src/shared/messaging.ts</span></div>
+          <div class="dp-gate">Exit: unit test roundtrip via mocked chrome API; error envelope propagates.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 1 -->
+    <h3 style="color:#60a5fa;margin-top:32px;margin-bottom:14px">Phase 1 — MVP: Generic Engine</h3>
+    <div class="dp-tasks">
+      <div class="dp-task">
+        <div class="dp-tid p1t">P1-T1</div>
+        <div class="dp-body">
+          <div class="dp-title">Profile parser</div>
+          <div class="dp-desc">Parse profile markdown (YAML frontmatter + well-known sections) into <code>ParsedProfile</code>. Tolerant: unknown sections preserved, missing sections empty. Round-trip serialiser. Warning list for malformed sections.</div>
+          <div class="dp-files"><span class="file-tag">src/shared/profile-parser.ts</span></div>
+          <div class="dp-gate">Exit: unit tests for valid/partial/malformed/unknown-section/roundtrip.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p1t">P1-T2</div>
+        <div class="dp-body">
+          <div class="dp-title">Q&A bank parser</div>
+          <div class="dp-desc">Parse <code>qa-bank.md</code> into <code>QAEntry[]</code>. Supports all Q&A types. <code>appendQAEntry</code> appends safely without overwriting (write-safety compliant).</div>
+          <div class="dp-files"><span class="file-tag">src/shared/qa-parser.ts</span></div>
+          <div class="dp-gate">Exit: unit tests for all types, malformed entry skipped, append idempotent, roundtrip stable.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p1t">P1-T3</div>
+        <div class="dp-body">
+          <div class="dp-title">History service</div>
+          <div class="dp-desc">Read/write <code>history.json</code>. URL normalisation (strip scheme/www/query/fragment). Duplicate detection: exact URL or company+role within <code>dedupeWindow</code> days.</div>
+          <div class="dp-files"><span class="file-tag">src/shared/history.ts</span></div>
+          <div class="dp-gate">Exit: unit tests for normalizeUrl, add, checkDuplicate (exact + company+role), search.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p1t">P1-T4</div>
+        <div class="dp-body">
+          <div class="dp-title">Content script — field detection</div>
+          <div class="dp-desc">DOM scanner producing <code>DetectedField[]</code>. In-memory <code>fieldId → element</code> map. Label resolution priority chain. Open shadow root traversal. Same/cross-origin iframe handling. Upload field classification. Honeypot skipping.</div>
+          <div class="dp-files"><span class="file-tag">src/content/detector.ts</span></div>
+          <div class="dp-gate">Exit: unit tests against fixture HTML for all input types, label resolution methods, shadow root, honeypot skip, upload classification.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p1t">P1-T5</div>
+        <div class="dp-body">
+          <div class="dp-title">Rules mapper</div>
+          <div class="dp-desc">Deterministic mapping via synonym dictionary (Appendix D). Match on <code>autocomplete</code> tokens first, then label/<code>name</code>/<code>id</code>. Returns <code>MappingResult[]</code> with <code>source: 'rule'</code> / <code>'blank'</code>.</div>
+          <div class="dp-files"><span class="file-tag">src/shared/mapper-rules.ts</span></div>
+          <div class="dp-gate">Exit: unit tests for all synonym categories; unmatched → blank with low confidence.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p1t">P1-T6</div>
+        <div class="dp-body">
+          <div class="dp-title">Value formatter</div>
+          <div class="dp-desc">Transform stored profile values to field-expected formats. <code>formatDate</code>: handles <code>YYYY-MM</code>, <code>YYYY-MM-DD</code>, <code>present</code>, target-format detection. <code>fuzzyMatchOption</code>: synonym table + Levenshtein distance.</div>
+          <div class="dp-files"><span class="file-tag">src/shared/value-formatter.ts</span></div>
+          <div class="dp-gate">Exit: unit tests for each date format, present handling, fuzzy match with synonyms, no-match.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p1t">P1-T7</div>
+        <div class="dp-body">
+          <div class="dp-title">Content script — value writer</div>
+          <div class="dp-desc">Write <code>MappingResult[]</code> into live DOM. Native setter + event dispatch for React/Vue/Angular. Per-field success/failure. Combobox simulation. <code>maxlength</code> truncation. Re-fetch element at write time (EC-14).</div>
+          <div class="dp-files"><span class="file-tag">src/content/writer.ts</span></div>
+          <div class="dp-gate">Exit: Playwright on plain-form + react-form: values retained after blur; submit never fired; truncation flagged.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p1t">P1-T8</div>
+        <div class="dp-body">
+          <div class="dp-title">Background orchestrator — Phase 1</div>
+          <div class="dp-desc">Handles: <code>DETECT_FIELDS</code>, <code>MAP_FIELDS</code> (rules only), <code>APPLY_VALUES</code>, <code>HISTORY_ADD</code>, <code>DUPLICATE_CHECK</code>. Session bound to <code>tabId</code>. Session persisted to <code>chrome.storage.local</code> before async ops (EC-22).</div>
+          <div class="dp-files"><span class="file-tag">src/background/orchestrator.ts</span></div>
+          <div class="dp-gate">Exit: integration test — full detect → map → apply → history cycle; duplicate warning on second apply.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p1t">P1-T9</div>
+        <div class="dp-body">
+          <div class="dp-title">Side panel UI — Phase 1</div>
+          <div class="dp-desc">Profile selector/editor, review table (label, editable value, source badge, confidence, required, include toggle), flagged items panel, duplicate warning banner, history view. ProfileBuilder textarea present but LLM button disabled until Phase 2.</div>
+          <div class="dp-files">
+            <span class="file-tag">ProfileSelector.tsx</span><span class="file-tag">ProfileEditor.tsx</span><span class="file-tag">ProfileBuilder.tsx</span>
+            <span class="file-tag">ReviewTable.tsx</span><span class="file-tag">FlaggedItems.tsx</span><span class="file-tag">DuplicateWarning.tsx</span><span class="file-tag">HistoryView.tsx</span>
+          </div>
+          <div class="dp-gate">Exit: Playwright — profile edit+save roundtrips; review table renders; include toggle works; apply triggers APPLY_VALUES.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p1t">P1-T10</div>
+        <div class="dp-body">
+          <div class="dp-title">Fixture forms</div>
+          <div class="dp-desc">10 fixture HTML files for E2E tests: plain, React controlled, split-date, combobox, wizard, repeatable, upload, captcha, iframe, shadow-DOM. Each has <code>window.__formSubmitted</code> flag.</div>
+          <div class="dp-files"><span class="file-tag">fixtures/*.html</span></div>
+          <div class="dp-gate">Exit: all fixtures open in Chrome; submit handler sets flag.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 2 -->
+    <h3 style="color:var(--accent2);margin-top:32px;margin-bottom:14px">Phase 2 — LLM Layer</h3>
+    <div class="dp-tasks">
+      <div class="dp-task">
+        <div class="dp-tid p2t">P2-T1</div>
+        <div class="dp-body">
+          <div class="dp-title">LLM provider abstraction & adapters</div>
+          <div class="dp-desc"><code>LLMProvider</code> interface + <code>FallbackChain</code>. Four adapters: OpenAI, Gemini, Anthropic, Custom (OpenAI-compatible). All via <code>fetch</code> — no SDKs. Per-call <code>AbortController</code> timeout. Error classification: network / auth / rate-limit / server / timeout / safety / invalid-output.</div>
+          <div class="dp-files">
+            <span class="file-tag">src/background/llm/provider.ts</span><span class="file-tag">openai.ts</span><span class="file-tag">gemini.ts</span><span class="file-tag">anthropic.ts</span><span class="file-tag">custom.ts</span><span class="file-tag">fallback.ts</span>
+          </div>
+          <div class="dp-gate">Exit: unit tests — each adapter serialises correctly; 429 retryable; 401 → auth error; timeout fires; FallbackChain skips failed provider; all-fail throws <code>FallbackExhaustedError</code>.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p2t">P2-T2</div>
+        <div class="dp-body">
+          <div class="dp-title">LLM field mapper</div>
+          <div class="dp-desc">Maps unresolved fields via LLM. Prompt construction with context compaction (only relevant profile sections). Batching (max <code>maxFieldBatchSize</code>). JSON validation + one repair retry. <code>blank</code>+flag on second failure.</div>
+          <div class="dp-files"><span class="file-tag">src/background/mapper-llm.ts</span></div>
+          <div class="dp-gate">Exit: unit tests — valid response merged; malformed → repair → second fail → blank+flag; compaction includes only relevant sections.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p2t">P2-T3</div>
+        <div class="dp-body">
+          <div class="dp-title">Q&A bank matcher + AI drafting</div>
+          <div class="dp-desc">3-step matching: (1) rule/fuzzy match on tags+question text; (2) LLM semantic match; (3) AI draft grounded in profile only. Save-back via <code>appendQAEntry</code>. Fact-not-in-profile → blank+flag (F4.4).</div>
+          <div class="dp-files"><span class="file-tag">src/background/qa-matcher.ts</span></div>
+          <div class="dp-gate">Exit: unit tests for each step; save-back appends without overwriting; fact-not-in-profile returns blank.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p2t">P2-T4</div>
+        <div class="dp-body">
+          <div class="dp-title">Profile paste-to-structure</div>
+          <div class="dp-desc">Enable <code>ProfileBuilder.tsx</code> — LLM converts raw text to structured profile markdown. Diff preview against existing on-disk content. User must confirm before write. Aborts if user cancels (§7.5.1).</div>
+          <div class="dp-files"><span class="file-tag">src/background/profile-builder.ts</span><span class="file-tag">src/panel/components/DiffPreview.tsx</span></div>
+          <div class="dp-gate">Exit: Playwright — paste → mock LLM → diff shown → confirm → file saved; cancel → no write.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p2t">P2-T5</div>
+        <div class="dp-body">
+          <div class="dp-title">Orchestrator — Phase 2 additions</div>
+          <div class="dp-desc">Update <code>MAP_FIELDS</code> to run LLM mapper + Q&A matcher after rules pass. Add <code>SAVE_QA_ENTRY</code> message. Handle <code>FallbackExhaustedError</code> → return rules-only + error metadata (EH-1).</div>
+          <div class="dp-files"><span class="file-tag">src/background/orchestrator.ts</span> (update)</div>
+          <div class="dp-gate">Exit: integration test — LLM fields filled; all-fail → rules-only + error flag; SAVE_QA_ENTRY roundtrips.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p2t">P2-T6</div>
+        <div class="dp-body">
+          <div class="dp-title">Provider test & health UI</div>
+          <div class="dp-desc">"Test" button sends 1-token request to each provider; reports latency / success / error. Health indicator shown per provider in settings.</div>
+          <div class="dp-files"><span class="file-tag">src/panel/components/ProviderHealthCard.tsx</span></div>
+          <div class="dp-gate">Exit: Playwright — Test button shows success+latency on mock; bad key shows error.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 3 -->
+    <h3 style="color:var(--green);margin-top:32px;margin-bottom:14px">Phase 3 — ATS Adapters & Robustness</h3>
+    <div class="dp-tasks">
+      <div class="dp-task">
+        <div class="dp-tid p3t">P3-T1</div>
+        <div class="dp-body">
+          <div class="dp-title">Adapter interface</div>
+          <div class="dp-desc">Define <code>ATSAdapter</code> interface with optional override hooks: <code>matches</code>, <code>detectFields</code>, <code>resolveLabel</code>, <code>beforeWrite</code>, <code>writeField</code>, <code>addRepeatableBlock</code>. Registry + <code>selectAdapter</code>. Absence → generic engine.</div>
+          <div class="dp-files"><span class="file-tag">src/content/adapters/adapter.ts</span></div>
+          <div class="dp-gate">Exit: unit test — correct adapter selected per URL; null for unknown; generic engine used as fallback.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p3t">P3-T2</div>
+        <div class="dp-body">
+          <div class="dp-title">Workday adapter</div>
+          <div class="dp-desc">Overrides for: <code>data-automation-id</code> as stable <code>fieldId</code>; date picker via keyboard simulation; lazy field loading via MutationObserver; repeatable section "Add" button; multi-step URL-based navigation.</div>
+          <div class="dp-files"><span class="file-tag">src/content/adapters/workday.ts</span></div>
+          <div class="dp-gate">Exit: Playwright on Workday DOM snapshot — ≥85% fields detected + filled; date written via keyboard; add-experience creates new row.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p3t">P3-T3</div>
+        <div class="dp-body">
+          <div class="dp-title">Greenhouse, Lever, iCIMS, Taleo, Bayt adapters</div>
+          <div class="dp-desc">One adapter per platform. Each implements <code>matches()</code> + overrides for platform-specific quirks. Smoke-tested against saved DOM snapshots. Bayt: English UI only (v1).</div>
+          <div class="dp-files"><span class="file-tag">src/content/adapters/{greenhouse,lever,icims,taleo,bayt}.ts</span></div>
+          <div class="dp-gate">Exit: DOM snapshot test per adapter — name, email, phone, one date field fill correctly.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p3t">P3-T4</div>
+        <div class="dp-body">
+          <div class="dp-title">Shadow DOM & iframe hardening</div>
+          <div class="dp-desc">Nested shadow root traversal (prefix <code>fieldId</code> by depth). Same-origin iframe recursion (prefix by index). Cross-origin iframe → single unfillable <code>DetectedField</code> flagged for user (EC-2, EC-3).</div>
+          <div class="dp-files"><span class="file-tag">src/content/detector.ts</span> (update)</div>
+          <div class="dp-gate">Exit: Playwright on shadow-dom + iframe fixtures — fields detected and filled; cross-origin flagged.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p3t">P3-T5</div>
+        <div class="dp-body">
+          <div class="dp-title">Date picker + combobox hardening</div>
+          <div class="dp-desc">4-step date picker strategy (value → keyboard → adapter override → flag). MutationObserver-based combobox wait (configurable up to 1500ms). Failures reported per-field.</div>
+          <div class="dp-files"><span class="file-tag">src/content/writer.ts</span> (update)</div>
+          <div class="dp-gate">Exit: Playwright on combobox + split-date fixtures pass.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p3t">P3-T6</div>
+        <div class="dp-body">
+          <div class="dp-title">MV3 service worker resumability</div>
+          <div class="dp-desc">Persist session state before each <code>await</code> mutating external state. Restore orphaned sessions on SW startup. Idempotent operations via <code>requestId</code>. History deduplication on re-run (EC-22).</div>
+          <div class="dp-files"><span class="file-tag">src/background/orchestrator.ts</span> (update)</div>
+          <div class="dp-gate">Exit: unit test — simulate SW termination; re-send APPLY_VALUES; completes correctly; no duplicate history entry.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p3t">P3-T7</div>
+        <div class="dp-body">
+          <div class="dp-title">Repeatable sections auto-add</div>
+          <div class="dp-desc">When <code>autoAddRepeatableBlocks: true</code>, click "Add another" for excess profile entries. Falls back to flagging on click failure. Orchestrator calls <code>addRepeatableBlock</code> before writing overflow entries.</div>
+          <div class="dp-files"><span class="file-tag">src/content/detector.ts</span> (update) · <span class="file-tag">src/background/orchestrator.ts</span> (update)</div>
+          <div class="dp-gate">Exit: Playwright on repeatable fixture — 3 entries + setting on → 2 adds + 3 filled; setting off → 1 filled + 2 flagged.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 4 -->
+    <h3 style="color:var(--yellow);margin-top:32px;margin-bottom:14px">Phase 4 — Polish & Productionisation</h3>
+    <div class="dp-tasks">
+      <div class="dp-task">
+        <div class="dp-tid p4t">P4-T1</div>
+        <div class="dp-body">
+          <div class="dp-title">First-run onboarding wizard</div>
+          <div class="dp-desc">5-step flow: Welcome → Data folder (required) → Create profile (optional) → LLM setup (optional) → Disclaimer. Shown when no profiles exist + <code>onboardingComplete</code> not set. Skippable after step 2.</div>
+          <div class="dp-files"><span class="file-tag">src/panel/components/Onboarding.tsx</span></div>
+          <div class="dp-gate">Exit: Playwright — fresh install shows onboarding; skip LLM → completes; re-open → not shown.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p4t">P4-T2</div>
+        <div class="dp-body">
+          <div class="dp-title">Settings UX</div>
+          <div class="dp-desc">Full settings in panel tab + options page. Sections: data folder, profiles, LLM providers (with health indicator + Test + remove), fallback chain (drag-to-reorder), fill behaviour, security, data management.</div>
+          <div class="dp-files"><span class="file-tag">src/panel/components/Settings.tsx</span><span class="file-tag">src/options/Settings.tsx</span></div>
+          <div class="dp-gate">Exit: Playwright — add provider; drag reorder persists; Delete all → clears history + keys; session-only clears key on reload.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p4t">P4-T3</div>
+        <div class="dp-body">
+          <div class="dp-title">History browser</div>
+          <div class="dp-desc">Searchable, filterable list. Columns: date, company, role, profile used, status, fields filled/flagged. Actions: change status, open URL, delete. Sort by date (default desc).</div>
+          <div class="dp-files"><span class="file-tag">src/panel/components/HistoryView.tsx</span> (expand from stub)</div>
+          <div class="dp-gate">Exit: Playwright — 5 entries shown; search filters; status change persists; delete removes entry.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p4t">P4-T4</div>
+        <div class="dp-body">
+          <div class="dp-title">Debug log & error reporting</div>
+          <div class="dp-desc">In-memory ring buffer (500 entries). <code>LogEntry</code> with level/context/message/data. API keys redacted. Profile content truncated. Download as JSON from "report details" in error toasts.</div>
+          <div class="dp-files"><span class="file-tag">src/background/debug-log.ts</span></div>
+          <div class="dp-gate">Exit: unit test — truncates at 500; keys redacted; download produces valid JSON.</div>
+        </div>
+      </div>
+      <div class="dp-task">
+        <div class="dp-tid p4t">P4-T5</div>
+        <div class="dp-body">
+          <div class="dp-title">Production build</div>
+          <div class="dp-desc">Minified production bundle. Extension icons (16/32/48/128px). <code>dist/</code> ready to load as unpacked extension. All Phase 1–3 smoke tests pass on production build.</div>
+          <div class="dp-files"><span class="file-tag">public/icon-*.png</span><span class="file-tag">vite.config.ts</span> (prod mode)</div>
+          <div class="dp-gate">Exit: <code>npm run build</code> clean; <code>dist/</code> loads in Chrome; AC-1–AC-7 pass on production build.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- §22 -->
+  <section class="section" id="s22">
+    <div class="section-header">
+      <div class="section-num">22</div>
+      <h2 class="section-title">Glossary</h2>
+    </div>
+    <ul class="glossary">
+      <li><span class="term">ATS</span><span class="def">Applicant Tracking System — Workday, Greenhouse, Lever, iCIMS, Taleo, etc.</span></li>
+      <li><span class="term">Profile</span><span class="def">A named markdown file describing the user, used to fill forms.</span></li>
+      <li><span class="term">Q&A bank</span><span class="def">Reusable answers to recurring non-resume questions (shared across all profiles).</span></li>
+      <li><span class="term">Rules layer</span><span class="def">Deterministic field mapping by label/attribute/autocomplete heuristics. Runs first.</span></li>
+      <li><span class="term">LLM fallback</span><span class="def">AI mapping/drafting for fields the rules layer can't resolve.</span></li>
+      <li><span class="term">Fallback chain</span><span class="def">Ordered list of LLM providers tried in turn on failure.</span></li>
+      <li><span class="term">Adapter</span><span class="def">Platform-specific module overriding generic detection/writing for a known ATS.</span></li>
+      <li><span class="term">Flagged item</span><span class="def">A field the tool intentionally leaves for the user — blank, low-confidence, upload, captcha, unknown fact.</span></li>
+      <li><span class="term">fieldId</span><span class="def">Generated stable ID for a detected field, used as key across detect→apply cycle.</span></li>
+      <li><span class="term">FileStore</span><span class="def">Abstraction over File System Access API that hides which context performs I/O.</span></li>
+    </ul>
+  </section>
+
+  <!-- §23 -->
+  <section class="section" id="s23">
+    <div class="section-header">
+      <div class="section-num">23</div>
+      <h2 class="section-title">Appendices</h2>
+    </div>
+
+    <h3 class="sub">Appendix B — Internal Types (Illustrative)</h3>
+    <pre><code>type FieldType =
+  | 'text' | 'textarea' | 'email' | 'tel' | 'url' | 'number'
+  | 'date' | 'month' | 'select' | 'radio' | 'checkbox'
+  | 'combobox' | 'file' | 'contenteditable' | 'unknown';
+
+interface DetectedField {
+  fieldId: string;      // generated stable id; key across detect→apply
+  selector?: string;    // diagnostic only; may be ambiguous on dynamic pages
+  label: string;
+  name?: string; id?: string; autocomplete?: string;
+  type: FieldType;
+  options?: string[];   // for select/radio/combobox
+  required: boolean;
+  group?: string;       // e.g. "experience#2"
+  maxLength?: number;
+  isUpload?: boolean;
+  uploadKind?: 'resume' | 'cover-letter' | 'other';
+}
+
+type MappingSource = 'rule' | 'profile' | 'qa' | 'llm' | 'blank';
+type Confidence    = 'high' | 'medium' | 'low';
+
+interface MappingResult {
+  field: DetectedField;
+  value: string | boolean | number | null;
+  source: MappingSource;
+  confidence: Confidence;
+  needsReview: boolean;
+  note?: string;    // e.g. "truncated", "no matching option"
+  include: boolean; // user toggle (default = !needsReview)
+}</code></pre>
+
+    <h3 class="sub">Appendix C — LLM Structured-Output Contract</h3>
+    <pre><code>// Request (per batch): fields[] + compact profileContext + qaEntries[]
+// Response (validated):
+{
+  "results": [
+    {
+      "fieldId": "f_17",       // matches DetectedField.fieldId
+      "value": "03/2022",
+      "source": "profile",    // profile | qa | llm | blank (never "rule")
+      "confidence": "high",   // high | medium | low
+      "note": null
+    }
+  ]
+}
+// Rules: values must derive only from provided context.
+// Unknown → value:null, source:"blank".
+// Invalid JSON → one repair retry → blank+flag.</code></pre>
+
+    <h3 class="sub">Appendix D — Rules Synonym Dictionary (Seed)</h3>
+    <div class="card">
+      <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:2">
+        name/first/last/middle · email · phone/mobile · address/street/city/state/country/zip/postal ·
+        LinkedIn/GitHub/portfolio/website · current title/position/role · current/most-recent company/employer ·
+        start/from date · end/to date · graduation date · GPA/grade/score/marks ·
+        degree/qualification · field/major · institution/university/school ·
+        certification/credential · skills · languages · years of experience ·
+        notice period · salary/expected compensation · work authorization/eligibility ·
+        visa/sponsorship · relocation · availability/start date
+      </p>
+      <p style="font-size:12px;color:var(--muted);font-style:italic">Extended during implementation; LLM covers the long tail.</p>
+    </div>
+
+    <div style="margin-top:40px;padding-top:24px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">
+      End of SPEC v0.2 · Job Form Filler Chrome Extension
+    </div>
+  </section>
+
+</main>
+
+<script>
+  // Active nav highlight on scroll
+  const sections = document.querySelectorAll('.section');
+  const navItems = document.querySelectorAll('.nav-item');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const id = e.target.id;
+        navItems.forEach(n => {
+          n.classList.toggle('active', n.getAttribute('href') === '#' + id);
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
