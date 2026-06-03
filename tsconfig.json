@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "DOM.AsyncIterable"],
+    "types": ["chrome", "wicg-file-system-access"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@shared/*": ["./src/shared/*"],
+      "@bg/*": ["./src/background/*"],
+      "@panel/*": ["./src/panel/*"],
+      "@content/*": ["./src/content/*"]
+    }
+  },
+  "include": ["src", "fixtures"],
+  "exclude": ["node_modules", "dist", "src/test-setup.ts", "**/*.test.ts", "**/*.spec.ts"]
+}

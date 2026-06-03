@@ -1,0 +1,39 @@
+{
+  "name": "job-form-filler",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0-beta.26",
+    "@tailwindcss/vite": "^4.1.7",
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^25.9.1",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/wicg-file-system-access": "^2023.10.7",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^3.2.2",
+    "autoprefixer": "^10.4.20",
+    "jsdom": "^26.1.0",
+    "tailwindcss": "^4.1.7",
+    "typescript": "^5.7.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.2"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
+  }
+}
