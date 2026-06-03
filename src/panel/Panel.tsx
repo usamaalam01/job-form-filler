@@ -6,11 +6,13 @@ import { sendToBackground } from '@shared/messaging'
 import { HistoryService } from '@shared/history'
 import { ProfileSelector } from './components/ProfileSelector'
 import { ProfileEditor } from './components/ProfileEditor'
+import { ProfileBuilder } from './components/ProfileBuilder'
 import { ReviewTable } from './components/ReviewTable'
 import { FlaggedItems } from './components/FlaggedItems'
 import { DuplicateWarning } from './components/DuplicateWarning'
 import { HistoryView } from './components/HistoryView'
-import type { ApplicationRecord, MappingResult } from '@shared/types'
+import { ProviderHealthCard } from './components/ProviderHealthCard'
+import type { ApplicationRecord, MappingResult, ProviderConfig } from '@shared/types'
 import { useState } from 'react'
 
 export function Panel() {
@@ -31,7 +33,10 @@ export function Panel() {
   } = usePanelStore()
 
   const [editingProfile, setEditingProfile] = useState(false)
+  const [buildingProfile, setBuildingProfile] = useState(false)
   const [applyResults, setApplyResults] = useState<{ ok: number; fail: number } | null>(null)
+  const [llmWarning, setLlmWarning] = useState<string | null>(null)
+  const [providerKeys, setProviderKeys] = useState<Record<string, string>>({})
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -90,13 +95,14 @@ export function Panel() {
     setDetectError(null)
     setApplyResults(null)
     try {
-      const { session, duplicate: dup } = await sendToBackground<
+      const { session, duplicate: dup, llmError } = await sendToBackground<
         { tabId: number; profileSlug: string },
-        { session: { mappingResults: MappingResult[] }; duplicate: ApplicationRecord | null }
+        { session: { mappingResults: MappingResult[] }; duplicate: ApplicationRecord | null; llmError?: string }
       >({ type: 'DETECT_FIELDS', payload: { tabId, profileSlug: activeProfile } })
 
       setMappingResults(session.mappingResults)
       setDuplicate(dup ? { record: dup } : null)
+      setLlmWarning(llmError ?? null)
     } catch (e) {
       setDetectError(e instanceof Error ? e.message : 'Detection failed.')
     } finally {
@@ -171,6 +177,19 @@ export function Panel() {
     )
   }
 
+  if (buildingProfile) {
+    return (
+      <div className="flex flex-col h-screen bg-gray-950 text-gray-100">
+        <Header />
+        <ProfileBuilder
+          activeProfile={activeProfile}
+          onSaved={() => { setBuildingProfile(false); loadProfiles() }}
+          onClose={() => setBuildingProfile(false)}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-screen bg-gray-950 text-gray-100 text-sm">
       <Header />
@@ -226,6 +245,7 @@ export function Panel() {
           {/* Status messages */}
           {detectError && <p className="text-xs text-red-400 px-3">{detectError}</p>}
           {applyError && <p className="text-xs text-red-400 px-3">{applyError}</p>}
+          {llmWarning && <p className="text-xs text-yellow-500 px-3">⚠ {llmWarning}</p>}
           {applyResults && (
             <p className="text-xs text-green-400 px-3">
               ✓ {applyResults.ok} filled{applyResults.fail > 0 ? `, ${applyResults.fail} failed` : ''}
@@ -258,17 +278,51 @@ export function Panel() {
         </div>
       )}
 
-      {/* Settings tab (stub — full UI in P4-T2) */}
+      {/* Settings tab */}
       {activeTab === 'settings' && (
-        <div className="flex-1 overflow-y-auto p-3">
-          <p className="text-xs text-gray-500 mb-3">Full settings UI added in Phase 4.</p>
-          <div className="rounded-lg border border-gray-800 p-3 text-xs text-gray-400">
-            <div className="font-semibold text-gray-300 mb-1">Current settings</div>
-            <div>AI drafting: {settings.aiDrafting ? 'on' : 'off'}</div>
-            <div>Confidence threshold: {settings.confidenceThreshold}</div>
-            <div>Fallback chain: {settings.fallbackChain.join(' → ') || '(none)'}</div>
-            <div>Providers: {settings.providers.filter(p => p.model).map(p => p.name).join(', ') || '(none configured)'}</div>
+        <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+          <div>
+            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">LLM Providers</div>
+            {settings.providers.map(p => (
+              <ProviderHealthCard
+                key={p.id}
+                provider={p}
+                apiKey={providerKeys[p.id] ?? ''}
+                onChange={patch => {
+                  const updated = settings.providers.map(pr => pr.id === p.id ? { ...pr, ...patch } : pr)
+                  setSettings({ ...settings, providers: updated as ProviderConfig[] })
+                  fileStore.writeSettings(settingsService.serialise({ ...settings, providers: updated as ProviderConfig[] }))
+                }}
+                onKeyChange={async key => {
+                  setProviderKeys(prev => ({ ...prev, [p.id]: key }))
+                  await settingsService.setApiKey(p.id, key, settings)
+                }}
+              />
+            ))}
           </div>
+
+          <div>
+            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Fallback chain</div>
+            <div className="rounded-lg border border-gray-800 p-3 text-xs text-gray-400">
+              {settings.fallbackChain.length
+                ? settings.fallbackChain.join(' → ')
+                : '(none — drag providers here in Phase 4)'}
+              <p className="mt-2 text-[10px] text-gray-600">To set the chain, edit settings.json or wait for the full settings UI in Phase 4.</p>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Profile tools</div>
+            <button
+              onClick={() => setBuildingProfile(true)}
+              disabled={!activeProfile}
+              className="w-full py-1.5 rounded-lg border border-purple-800 bg-purple-950/40 text-purple-300 text-xs font-semibold disabled:opacity-40 hover:bg-purple-900/40"
+            >
+              Build profile from pasted text (AI)
+            </button>
+          </div>
+
+          <div className="text-[10px] text-gray-600 mt-2">Full settings UI (Phase 4): key persistence mode, confidence threshold, dedupe window.</div>
         </div>
       )}
     </div>
