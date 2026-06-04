@@ -5,6 +5,7 @@ import type { AppSettings, ProviderConfig } from './types'
 const DEFAULT_PROVIDERS: ProviderConfig[] = [
   { id: 'openai',    name: 'OpenAI',    model: '', baseUrl: 'https://api.openai.com/v1' },
   { id: 'groq',      name: 'Groq',      model: '', baseUrl: 'https://api.groq.com/openai/v1' },
+  { id: 'deepseek',  name: 'DeepSeek',  model: '', baseUrl: 'https://api.deepseek.com/v1' },
   { id: 'gemini',    name: 'Gemini',    model: '', baseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
   { id: 'anthropic', name: 'Anthropic', model: '', baseUrl: 'https://api.anthropic.com' },
   { id: 'custom',    name: 'Custom',    model: '', baseUrl: '' },

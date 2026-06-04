@@ -13,6 +13,7 @@ export function makeProvider(cfg: ProviderConfig): LLMProvider {
   switch (cfg.id) {
     case 'openai':    return new OpenAIAdapter(cfg.id, cfg.name, cfg.model, cfg.baseUrl)
     case 'groq':      return new OpenAIAdapter(cfg.id, cfg.name, cfg.model, cfg.baseUrl) // OpenAI-compatible
+    case 'deepseek':  return new OpenAIAdapter(cfg.id, cfg.name, cfg.model, cfg.baseUrl) // OpenAI-compatible
     case 'anthropic': return new AnthropicAdapter(cfg.id, cfg.name, cfg.model, cfg.baseUrl)
     case 'gemini':    return new GeminiAdapter(cfg.id, cfg.name, cfg.model, cfg.baseUrl)
     default:          return new CustomAdapter(cfg.id, cfg.name, cfg.model, cfg.baseUrl)
