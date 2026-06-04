@@ -330,8 +330,9 @@ export function initOrchestrator(): void {
   onMessage<{ rawText: string; targetRole: string }, string>(
     'LOAD_PROFILE',
     async ({ rawText, targetRole }) => {
-      const chain = await makeFallbackChain()
-      if (!chain) throw new Error('No LLM provider configured. Please add one in Settings.')
+      const settings = await loadSettingsNoFolder()
+      if (!settings.fallbackChain.length) throw new Error('No LLM provider configured. Please add one in Settings.')
+      const chain = new FallbackChain(settings.fallbackChain, settingsService, settings)
       return structureProfileText(rawText, targetRole, chain)
     }
   )

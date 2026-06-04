@@ -23,7 +23,7 @@ export function ProfileBuilder({ activeProfile, onSaved, onClose }: Props) {
     setIsStructuring(true)
     setError(null)
     try {
-      const existing = activeProfile ? await fileStore.readProfile(activeProfile) : null
+      const existing = activeProfile ? await fileStore.readProfile(activeProfile).catch(() => null) : null
       setExistingMd(existing)
       const result = await sendToBackground<{ rawText: string; targetRole: string }, string>({
         type: 'LOAD_PROFILE',
