@@ -9,11 +9,11 @@ import { parseQABank, appendQAEntry } from '@shared/qa-parser'
 import { HistoryService, normalizeUrl } from '@shared/history'
 import { FileStore } from '../panel/filestore'
 import { settingsService } from '@shared/settings'
-import { FallbackChain } from './llm/fallback'
+import { FallbackChain, makeProvider } from './llm/fallback'
 import { mapFieldsWithLLM } from './mapper-llm'
 import { matchQuestion } from './qa-matcher'
 import { structureProfileText } from './profile-builder'
-import { FallbackExhaustedError } from './llm/provider'
+import { FallbackExhaustedError, LLMProviderError } from './llm/provider'
 import { debugLog } from './debug-log'
 
 // ─── Session store (in-memory + persisted for EC-22) ─────────────────────────
@@ -347,7 +347,6 @@ export function initOrchestrator(): void {
       if (!apiKey) return { ok: false, error: 'No API key set. Paste your key and try again.' }
       if (!model) return { ok: false, error: 'No model set. Enter a model name first.' }
 
-      const { makeProvider } = await import('./llm/fallback')
       const settings = await loadSettingsNoFolder()
       const provider = makeProvider({ id: providerId, name: providerId, model, baseUrl })
       const start = Date.now()
@@ -361,8 +360,7 @@ export function initOrchestrator(): void {
         debugLog.info('orchestrator', `Provider test OK`, result)
         return result
       } catch (err) {
-        const { LLMProviderError } = await import('./llm/provider')
-        const error = err instanceof LLMProviderError ? err.llmError.message : String(err)
+        const error = err instanceof LLMProviderError ? err.llmError.message : (err instanceof Error ? err.message : String(err))
         debugLog.error('orchestrator', `Provider test failed`, { error })
         return { ok: false, error }
       }
