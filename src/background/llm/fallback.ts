@@ -12,6 +12,7 @@ import { CustomAdapter } from './custom'
 export function makeProvider(cfg: ProviderConfig): LLMProvider {
   switch (cfg.id) {
     case 'openai':    return new OpenAIAdapter(cfg.id, cfg.name, cfg.model, cfg.baseUrl)
+    case 'groq':      return new OpenAIAdapter(cfg.id, cfg.name, cfg.model, cfg.baseUrl) // OpenAI-compatible
     case 'anthropic': return new AnthropicAdapter(cfg.id, cfg.name, cfg.model, cfg.baseUrl)
     case 'gemini':    return new GeminiAdapter(cfg.id, cfg.name, cfg.model, cfg.baseUrl)
     default:          return new CustomAdapter(cfg.id, cfg.name, cfg.model, cfg.baseUrl)
@@ -76,6 +77,34 @@ export class FallbackChain {
     }
 
     throw new FallbackExhaustedError(errors)
+  }
+
+  /**
+   * Tests all providers that are (a) in the fallback chain and (b) have a key
+   * and model configured. Returns a map of providerId → result.
+   * If every tested provider fails, also returns `allFailed: true`.
+   */
+  async testAllProviders(): Promise<{
+    results: Record<string, { ok: boolean; latencyMs?: number; error?: string }>
+    allFailed: boolean
+    anyConfigured: boolean
+  }> {
+    const results: Record<string, { ok: boolean; latencyMs?: number; error?: string }> = {}
+    let anyConfigured = false
+
+    for (const providerId of this.chain) {
+      const cfg = this.appSettings.providers.find(p => p.id === providerId)
+      if (!cfg || !cfg.model) continue
+      const apiKey = await this.settings.getApiKey(providerId)
+      if (!apiKey) continue
+      anyConfigured = true
+      results[providerId] = await this.testProvider(providerId)
+    }
+
+    const testedIds = Object.keys(results)
+    const allFailed = testedIds.length > 0 && testedIds.every(id => !results[id].ok)
+
+    return { results, allFailed, anyConfigured }
   }
 
   /** Sends a minimal 1-token test request. Returns latencyMs on success. */

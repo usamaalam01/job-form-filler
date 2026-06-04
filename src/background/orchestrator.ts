@@ -335,6 +335,16 @@ export function initOrchestrator(): void {
     }
   )
 
+  // TEST_ALL_PROVIDERS — check health of all chain providers at once
+  onMessage<void, { results: Record<string, { ok: boolean; latencyMs?: number; error?: string }>; allFailed: boolean; anyConfigured: boolean }>(
+    'TEST_ALL_PROVIDERS',
+    async () => {
+      const chain = await makeFallbackChain()
+      if (!chain) return { results: {}, allFailed: false, anyConfigured: false }
+      return chain.testAllProviders()
+    }
+  )
+
   // GET_DEBUG_LOG — return current log entries to panel
   onMessage<void, import('./debug-log').LogEntry[]>(
     'GET_DEBUG_LOG',

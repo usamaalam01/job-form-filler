@@ -38,6 +38,7 @@ export function Panel() {
   const [buildingProfile, setBuildingProfile] = useState(false)
   const [applyResults, setApplyResults] = useState<{ ok: number; fail: number } | null>(null)
   const [llmWarning, setLlmWarning] = useState<string | null>(null)
+  const [providerHealthWarning, setProviderHealthWarning] = useState<string | null>(null)
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,8 @@ export function Panel() {
         const slugs = await fileStore.listProfiles()
         const onboardingDone = (raw as Record<string, unknown>)['onboardingComplete'] === true
         if (!onboardingDone && slugs.length === 0) setShowOnboarding(true)
+        // Background health check — warn if all configured providers are failing
+        checkProviderHealth()
       } else {
         setShowOnboarding(true)
       }
@@ -83,6 +86,31 @@ export function Panel() {
     }
     init()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Provider health check ─────────────────────────────────────────────────
+
+  const checkProviderHealth = useCallback(async () => {
+    try {
+      const { allFailed, anyConfigured, results } = await sendToBackground<
+        void,
+        { results: Record<string, { ok: boolean; error?: string }>; allFailed: boolean; anyConfigured: boolean }
+      >({ type: 'TEST_ALL_PROVIDERS', payload: undefined })
+
+      if (!anyConfigured) {
+        setProviderHealthWarning('No LLM providers configured. AI mapping is disabled — fields will be filled by rules only. Add a provider in Settings.')
+      } else if (allFailed) {
+        const errors = Object.entries(results)
+          .filter(([, r]) => !r.ok)
+          .map(([id, r]) => `${id}: ${r.error ?? 'failed'}`)
+          .join(' · ')
+        setProviderHealthWarning(`All LLM providers are unreachable or have invalid keys. AI mapping is disabled. → ${errors}`)
+      } else {
+        setProviderHealthWarning(null)
+      }
+    } catch {
+      // Background not ready yet — silent fail, not a user-facing error
+    }
+  }, [])
 
   // ── Connect folder ────────────────────────────────────────────────────────
 
@@ -264,6 +292,21 @@ export function Panel() {
           </div>
 
           {/* Status messages */}
+          {providerHealthWarning && (
+            <div className="mx-3 mt-1 rounded-lg border border-orange-800 bg-orange-950/50 px-3 py-2 flex items-start gap-2">
+              <span className="text-orange-400 shrink-0">⚠</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-orange-300 leading-relaxed">{providerHealthWarning}</p>
+                <button
+                  onClick={checkProviderHealth}
+                  className="mt-1 text-[10px] text-orange-500 hover:text-orange-300 underline"
+                >
+                  Re-check
+                </button>
+              </div>
+              <button onClick={() => setProviderHealthWarning(null)} className="text-orange-700 hover:text-orange-400 text-xs shrink-0">✕</button>
+            </div>
+          )}
           {detectError && <p className="text-xs text-red-400 px-3">{detectError}</p>}
           {applyError && <p className="text-xs text-red-400 px-3">{applyError}</p>}
           {llmWarning && <p className="text-xs text-yellow-500 px-3">⚠ {llmWarning}</p>}

@@ -248,6 +248,7 @@ export type MessageType =
   | 'SAVE_QA_ENTRY'
   | 'TEST_PROVIDER'
   | 'TEST_PROVIDER_RESULT'
+  | 'TEST_ALL_PROVIDERS'
   | 'GET_DEBUG_LOG'
   | 'ERROR'
 
