@@ -339,12 +339,11 @@ export function initOrchestrator(): void {
   // TEST_PROVIDER — test a provider's connectivity
   // Accepts model + baseUrl from the UI so the test always uses live values,
   // not stale stored ones. Bypasses fileStore entirely.
-  onMessage<{ providerId: string; model: string; baseUrl: string }, { ok: boolean; latencyMs?: number; error?: string }>(
+  onMessage<{ providerId: string; model: string; baseUrl: string; apiKey: string }, { ok: boolean; latencyMs?: number; error?: string }>(
     'TEST_PROVIDER',
-    async ({ providerId, model, baseUrl }) => {
+    async ({ providerId, model, baseUrl, apiKey }) => {
       debugLog.info('orchestrator', `Testing provider: ${providerId}`, { model })
 
-      const apiKey = await settingsService.getApiKey(providerId)
       if (!apiKey) return { ok: false, error: 'No API key set. Paste your key and try again.' }
       if (!model) return { ok: false, error: 'No model set. Enter a model name first.' }
 

@@ -20,9 +20,9 @@ export function ProviderHealthCard({ provider, apiKey, onChange, onKeyChange }: 
   const test = async () => {
     setStatus('testing')
     try {
-      const r = await sendToBackground<{ providerId: string; model: string; baseUrl: string }, HealthResult>({
+      const r = await sendToBackground<{ providerId: string; model: string; baseUrl: string; apiKey: string }, HealthResult>({
         type: 'TEST_PROVIDER',
-        payload: { providerId: provider.id, model: provider.model, baseUrl: provider.baseUrl },
+        payload: { providerId: provider.id, model: provider.model, baseUrl: provider.baseUrl, apiKey },
       })
       setResult(r)
       setStatus(r.ok ? 'ok' : 'error')
