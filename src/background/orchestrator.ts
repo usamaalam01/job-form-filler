@@ -67,6 +67,20 @@ async function makeFallbackChain(): Promise<FallbackChain | null> {
   return new FallbackChain(settings.fallbackChain, settingsService, settings)
 }
 
+/**
+ * Reads settings without requiring a folder connection.
+ * Tries fileStore first; falls back to SETTINGS_DEFAULTS if folder is not connected.
+ * Used by TEST_PROVIDER so the user can test a key before completing onboarding.
+ */
+async function loadSettingsNoFolder() {
+  try {
+    const rawSettings = await fileStore.readSettings()
+    return settingsService.parse(rawSettings)
+  } catch {
+    return settingsService.parse({})
+  }
+}
+
 // ─── Orchestrator init ────────────────────────────────────────────────────────
 
 export function initOrchestrator(): void {
@@ -323,12 +337,16 @@ export function initOrchestrator(): void {
   )
 
   // TEST_PROVIDER — test a provider's connectivity
+  // Intentionally bypasses fileStore so it works before/without a folder connection.
+  // Reads provider config from stored settings (falls back to defaults) and API key
+  // from chrome.storage.local directly.
   onMessage<{ providerId: string }, { ok: boolean; latencyMs?: number; error?: string }>(
     'TEST_PROVIDER',
     async ({ providerId }) => {
       debugLog.info('orchestrator', `Testing provider: ${providerId}`)
-      const chain = await makeFallbackChain()
-      if (!chain) return { ok: false, error: 'No providers configured.' }
+      // Build a minimal chain that doesn't need fileStore to be connected
+      const settings = await loadSettingsNoFolder()
+      const chain = new FallbackChain([providerId], settingsService, settings)
       const result = await chain.testProvider(providerId)
       debugLog.info('orchestrator', `Provider test result`, result)
       return result
