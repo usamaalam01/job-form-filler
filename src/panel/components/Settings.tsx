@@ -22,6 +22,9 @@ export function Settings({ settings, onSettingsChange, onDataDeleted }: Props) {
     setSaving(true)
     try {
       await fileStore.writeSettings(settingsService.serialise(updated))
+      // Cache LLM settings to chrome.storage.local so background SW can read
+      // them without needing the folder handle
+      await settingsService.cacheLLMSettings(updated)
       onSettingsChange(updated)
       setStatus('Saved.')
       setTimeout(() => setStatus(null), 2000)

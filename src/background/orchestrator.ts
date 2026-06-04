@@ -68,17 +68,12 @@ async function makeFallbackChain(): Promise<FallbackChain | null> {
 }
 
 /**
- * Reads settings without requiring a folder connection.
- * Tries fileStore first; falls back to SETTINGS_DEFAULTS if folder is not connected.
- * Used by TEST_PROVIDER so the user can test a key before completing onboarding.
+ * Reads LLM-relevant settings without requiring a folder connection.
+ * Reads from chrome.storage.local cache written by the panel on every save.
+ * Falls back to SETTINGS_DEFAULTS if nothing is cached yet.
  */
 async function loadSettingsNoFolder() {
-  try {
-    const rawSettings = await fileStore.readSettings()
-    return settingsService.parse(rawSettings)
-  } catch {
-    return settingsService.parse({})
-  }
+  return settingsService.loadCachedLLMSettings()
 }
 
 // ─── Orchestrator init ────────────────────────────────────────────────────────

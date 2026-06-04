@@ -100,6 +100,34 @@ export class SettingsService {
     this.sessionKeys.clear()
   }
 
+  /**
+   * Persists the LLM-relevant parts of settings (fallbackChain + providers)
+   * to chrome.storage.local so the background SW can read them without needing
+   * the FileStore folder handle. Call this whenever settings are saved to disk.
+   */
+  async cacheLLMSettings(settings: AppSettings): Promise<void> {
+    await chrome.storage.local.set({
+      llm_fallbackChain: settings.fallbackChain,
+      llm_providers: settings.providers,
+      llm_timeoutMs: settings.llmTimeoutMs,
+    })
+  }
+
+  /**
+   * Reads LLM settings from chrome.storage.local cache.
+   * Returns a partial AppSettings with only the LLM fields populated.
+   * Falls back to SETTINGS_DEFAULTS if nothing is cached.
+   */
+  async loadCachedLLMSettings(): Promise<AppSettings> {
+    const result = await chrome.storage.local.get(['llm_fallbackChain', 'llm_providers', 'llm_timeoutMs'])
+    return {
+      ...SETTINGS_DEFAULTS,
+      fallbackChain: (result['llm_fallbackChain'] as string[] | undefined) ?? SETTINGS_DEFAULTS.fallbackChain,
+      providers: this.mergeProviders(result['llm_providers'] as ProviderConfig[] | undefined),
+      llmTimeoutMs: (result['llm_timeoutMs'] as number | undefined) ?? SETTINGS_DEFAULTS.llmTimeoutMs,
+    }
+  }
+
   // ── Private helpers ───────────────────────────────────────────────────────
 
   private mergeProviders(stored: ProviderConfig[] | undefined): ProviderConfig[] {

@@ -59,8 +59,11 @@ export function Onboarding({ onComplete }: Props) {
     try {
       const raw = await fileStore.readSettings()
       const s = settingsService.parse(raw)
-      // Save provider configs
-      await fileStore.writeSettings(settingsService.serialise({ ...s, providers, onboardingComplete: true } as typeof s & { onboardingComplete: boolean }))
+      const updated = { ...s, providers, onboardingComplete: true } as typeof s & { onboardingComplete: boolean }
+      // Save provider configs to disk
+      await fileStore.writeSettings(settingsService.serialise(updated))
+      // Cache LLM settings to chrome.storage.local for background SW access
+      await settingsService.cacheLLMSettings(updated)
       // Save API keys
       for (const [id, key] of Object.entries(providerKeys)) {
         if (key) await settingsService.setApiKey(id, key, s)
