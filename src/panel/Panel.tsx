@@ -68,14 +68,22 @@ export function Panel() {
         const raw = await fileStore.readSettings()
         const parsed = settingsService.parse(raw)
         setSettings(parsed)
-        // Show onboarding if never completed and no profiles exist
+        // Show onboarding only if never completed AND no profiles exist
         const slugs = await fileStore.listProfiles()
         const onboardingDone = (raw as Record<string, unknown>)['onboardingComplete'] === true
         if (!onboardingDone && slugs.length === 0) setShowOnboarding(true)
         // Background health check — warn if all configured providers are failing
         checkProviderHealth()
       } else {
-        setShowOnboarding(true)
+        // Check if onboarding was previously completed via chrome.storage.local flag.
+        // If yes, the folder handle expired (browser restart) — show "re-connect" screen.
+        // If no, this is a fresh install — show onboarding.
+        const stored = await chrome.storage.local.get('onboardingComplete')
+        if (stored['onboardingComplete'] === true) {
+          // folder needs re-grant, don't show onboarding again
+        } else {
+          setShowOnboarding(true)
+        }
       }
       // Get active tab info
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -191,6 +199,7 @@ export function Panel() {
       <Onboarding onComplete={async () => {
         setShowOnboarding(false)
         setFolderConnected(true)
+        await chrome.storage.local.set({ onboardingComplete: true })
         await loadProfiles()
         await loadHistory()
         const raw = await fileStore.readSettings()
@@ -204,10 +213,10 @@ export function Panel() {
       <div className="flex flex-col h-screen bg-gray-950 text-gray-100">
         <Header />
         <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6 text-center">
-          <div className="w-12 h-12 rounded-xl bg-blue-950 border border-blue-800 flex items-center justify-center text-2xl">📁</div>
+          <div className="w-12 h-12 rounded-xl bg-yellow-950 border border-yellow-800 flex items-center justify-center text-2xl">📁</div>
           <div>
-            <p className="text-sm font-semibold text-white">Connect your data folder</p>
-            <p className="text-xs text-gray-500 mt-1">Choose where to store your profiles and history.</p>
+            <p className="text-sm font-semibold text-white">Re-connect your data folder</p>
+            <p className="text-xs text-gray-500 mt-1">Chrome requires folder access to be re-granted after a browser restart. Your data is safe — just pick the same folder again.</p>
           </div>
           <button onClick={connectFolder} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold">
             Pick folder
