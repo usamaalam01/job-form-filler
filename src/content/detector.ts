@@ -16,7 +16,7 @@ export function clearFieldMap(): void {
 export function detectFields(root: Document | ShadowRoot = document): DetectedField[] {
   fieldMap.clear()
   const fields: DetectedField[] = []
-  scanRoot(root, fields, 0, '')
+  scanRoot(root, fields, 0, '', 0)
   return fields
 }
 
@@ -27,6 +27,7 @@ function scanRoot(
   out: DetectedField[],
   startIndex: number,
   idPrefix: string,
+  shadowDepth: number,
 ): number {
   const doc = root instanceof Document ? root : root.ownerDocument ?? document
   let index = startIndex
@@ -51,6 +52,7 @@ function scanRoot(
     const options = type === 'select' ? getSelectOptions(el as HTMLSelectElement) :
                     type === 'radio'  ? getRadioOptions(el, root)               : undefined
 
+    const group = detectGroup(el)
     const field: DetectedField = {
       fieldId,
       selector: buildSelector(el),
@@ -61,10 +63,12 @@ function scanRoot(
       type,
       options,
       required: (el as HTMLInputElement).required ?? el.getAttribute('aria-required') === 'true',
-      group: detectGroup(el),
+      group,
       maxLength: (el as HTMLInputElement).maxLength > 0 ? (el as HTMLInputElement).maxLength : undefined,
       isUpload: type === 'file',
       uploadKind: type === 'file' ? classifyUpload(el) : undefined,
+      addAnotherButtonSelector: group ? detectAddAnotherButton(el, group) : undefined,
+      shadowDepth: shadowDepth > 0 ? shadowDepth : undefined,
     }
 
     fieldMap.set(fieldId, el)
@@ -72,12 +76,12 @@ function scanRoot(
     index++
   }
 
-  // Traverse open shadow roots
+  // Traverse open shadow roots (depth-tracked to avoid fieldId collisions)
   const all = root.querySelectorAll('*')
   for (const el of all) {
     const shadow = (el as HTMLElement).shadowRoot
     if (!shadow) continue
-    index = scanRoot(shadow, out, index, `${idPrefix}shadow_`)
+    index = scanRoot(shadow, out, index, `${idPrefix}s${shadowDepth + 1}_`, shadowDepth + 1)
   }
 
   // Same-origin iframes
@@ -87,7 +91,7 @@ function scanRoot(
     try {
       const iDoc = iframe.contentDocument
       if (iDoc) {
-        index = scanRoot(iDoc, out, index, `${idPrefix}iframe${iframeIdx}_`)
+        index = scanRoot(iDoc, out, index, `${idPrefix}iframe${iframeIdx}_`, 0)
       }
     } catch {
       // Cross-origin — emit a single unfillable placeholder
@@ -96,13 +100,15 @@ function scanRoot(
         label: 'cross-origin iframe — cannot fill',
         type: 'unknown',
         required: false,
+        // needsReview is on MappingResult, not DetectedField;
+        // the mapper will set needsReview:true for 'unknown' type fields
       }
       out.push(placeholder)
     }
     iframeIdx++
-    void doc // suppress unused variable warning
   }
 
+  void doc
   return index
 }
 
@@ -238,6 +244,29 @@ function detectGroup(el: HTMLElement): string | undefined {
     if ((cur.tagName === 'FIELDSET' || cur.tagName === 'SECTION') && GROUP_PATTERNS.test(cur.textContent ?? '')) {
       const legend = cur.querySelector('legend')
       if (legend) return legend.textContent?.trim().slice(0, 40)
+    }
+    cur = cur.parentElement
+    depth++
+  }
+  return undefined
+}
+
+// ─── "Add another" button detection ──────────────────────────────────────────
+
+const ADD_ANOTHER_PATTERNS = /add\s+(another|more|new|\+)|add\s+\w+|new\s+entry|\+\s*add/i
+
+function detectAddAnotherButton(el: HTMLElement, _group: string): string | undefined {
+  // Walk up to the repeatable container, then look for an "add" button sibling
+  let cur: HTMLElement | null = el.parentElement
+  let depth = 0
+  while (cur && depth < 10) {
+    // Look for a sibling or descendant button that matches "add another"
+    const buttons = cur.querySelectorAll<HTMLElement>('button, [role=button], a[href="#"]')
+    for (const btn of buttons) {
+      const text = btn.textContent?.trim() ?? ''
+      if (ADD_ANOTHER_PATTERNS.test(text)) {
+        return buildSelector(btn)
+      }
     }
     cur = cur.parentElement
     depth++

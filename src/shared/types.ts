@@ -38,6 +38,10 @@ export interface DetectedField {
   uploadKind?: 'resume' | 'cover-letter' | 'other'
   /** fieldId of a sibling "currently work here" checkbox, if detected. */
   currentlyHereCheckboxId?: string
+  /** Selector for the "Add another" button that creates a new block for this field's group. */
+  addAnotherButtonSelector?: string
+  /** Shadow root depth (0 = main document). Used to avoid fieldId collisions. */
+  shadowDepth?: number
 }
 
 // ─── Mapping ─────────────────────────────────────────────────────────────────

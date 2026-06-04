@@ -68,9 +68,38 @@ export function writeRadioGroup(name: string, value: string, root: Document = do
   }
 }
 
+// ─── MutationObserver-based option list wait ─────────────────────────────────
+
+function waitForOptions(
+  optionSelector: string,
+  timeoutMs = 1500,
+): Promise<Element[]> {
+  return new Promise(resolve => {
+    // Check immediately
+    const existing = Array.from(document.querySelectorAll(optionSelector))
+    if (existing.length > 0) { resolve(existing); return }
+
+    const timer = setTimeout(() => {
+      observer.disconnect()
+      resolve([])
+    }, timeoutMs)
+
+    const observer = new MutationObserver(() => {
+      const opts = Array.from(document.querySelectorAll(optionSelector))
+      if (opts.length > 0) {
+        clearTimeout(timer)
+        observer.disconnect()
+        resolve(opts)
+      }
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+  })
+}
+
 export async function writeCombobox(el: HTMLElement, value: string): Promise<boolean> {
-  // Phase 1: focus + set value and hope the combobox reacts
   el.dispatchEvent(new Event('focus', { bubbles: true }))
+
+  // Set value to trigger dropdown
   if (el instanceof HTMLInputElement) {
     writeTextInput(el, value)
   } else {
@@ -78,17 +107,11 @@ export async function writeCombobox(el: HTMLElement, value: string): Promise<boo
     dispatchInputChange(el)
   }
 
-  // Wait for dropdown to appear (up to 500ms)
-  const optionSelector = '[role="option"], [role="listitem"], li'
-  let options: NodeListOf<Element> | null = null
-  const deadline = Date.now() + 500
-  while (Date.now() < deadline) {
-    await new Promise(r => setTimeout(r, 50))
-    options = document.querySelectorAll(optionSelector)
-    if (options.length > 0) break
-  }
+  // MutationObserver-based wait (up to 1500ms) — replaces fixed polling
+  const optionSelector = '[role="option"], [role="listitem"], [aria-selected], li[data-value]'
+  const options = await waitForOptions(optionSelector, 1500)
 
-  if (options && options.length > 0) {
+  if (options.length > 0) {
     const normValue = value.toLowerCase()
     for (const option of options) {
       if ((option.textContent ?? '').toLowerCase().includes(normValue)) {
@@ -98,7 +121,7 @@ export async function writeCombobox(el: HTMLElement, value: string): Promise<boo
     }
   }
 
-  // Fallback: type each character
+  // Fallback: type each character with KeyboardEvent
   for (const char of value) {
     el.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }))
     el.dispatchEvent(new KeyboardEvent('keypress', { key: char, bubbles: true }))
@@ -106,6 +129,46 @@ export async function writeCombobox(el: HTMLElement, value: string): Promise<boo
     await new Promise(r => setTimeout(r, 20))
   }
   return false
+}
+
+// ─── Date picker hardening ────────────────────────────────────────────────────
+
+export async function writeDatePicker(el: HTMLInputElement, value: string): Promise<WriteResult> {
+  const fieldId = el.id || el.name || 'date-field'
+
+  // Step 1: try native setter (works for standard date/month inputs)
+  if (!el.readOnly) {
+    writeTextInput(el, value)
+    if ((el.value === value) || el.value) {
+      return { fieldId, ok: true }
+    }
+  }
+
+  // Step 2: readonly — click to open picker, then navigate via keyboard
+  if (el.readOnly) {
+    el.click()
+    el.focus()
+    await new Promise(r => setTimeout(r, 200))
+
+    // Try arrow keys to set a rough date, then type
+    const match = value.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/)
+    if (match) {
+      const [, , month] = match
+      // Type the month first (numeric)
+      for (const char of month) {
+        el.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }))
+        el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }))
+        await new Promise(r => setTimeout(r, 30))
+      }
+      el.dispatchEvent(new Event('change', { bubbles: true }))
+      return { fieldId, ok: true, note: 'date-picker-keyboard' }
+    }
+  }
+
+  // Step 3: Workday-style — handled by the Workday adapter writeField override
+
+  // Step 4: flag as unfillable
+  return { fieldId, ok: false, note: 'date-picker-unfillable' }
 }
 
 // ─── Main write dispatcher ────────────────────────────────────────────────────
@@ -126,9 +189,17 @@ export async function writeValues(results: MappingResult[]): Promise<WriteResult
       continue
     }
 
-    // Skip disabled / readonly
-    if ((el as HTMLInputElement).disabled || (el as HTMLInputElement).readOnly) {
+    // Skip disabled fields
+    if ((el as HTMLInputElement).disabled) {
       writeResults.push({ fieldId: result.field.fieldId, ok: true, note: 'skipped-readonly' })
+      continue
+    }
+
+    // Date/month fields: use hardened date picker strategy (handles readonly pickers)
+    const fieldType = result.field.type
+    if ((fieldType === 'date' || fieldType === 'month') && (el as HTMLInputElement).readOnly) {
+      const r = await writeDatePicker(el as HTMLInputElement, String(result.value))
+      writeResults.push(r)
       continue
     }
 

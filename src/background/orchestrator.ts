@@ -37,6 +37,26 @@ async function clearSession(tabId: number): Promise<void> {
 
 const fileStore = new FileStore()
 
+// ─── Idempotency cache (EC-22) ────────────────────────────────────────────────
+// Tracks completed requestIds to prevent duplicate history writes on SW restart
+
+const COMPLETED_KEY = 'completed_requests'
+
+async function isCompleted(requestId: string): Promise<boolean> {
+  const stored = await chrome.storage.local.get(COMPLETED_KEY)
+  const set: string[] = stored[COMPLETED_KEY] ?? []
+  return set.includes(requestId)
+}
+
+async function markCompleted(requestId: string): Promise<void> {
+  const stored = await chrome.storage.local.get(COMPLETED_KEY)
+  const set: string[] = stored[COMPLETED_KEY] ?? []
+  set.push(requestId)
+  // Keep last 50 request IDs to avoid unbounded growth
+  const trimmed = set.slice(-50)
+  await chrome.storage.local.set({ [COMPLETED_KEY]: trimmed })
+}
+
 // ─── FallbackChain factory ────────────────────────────────────────────────────
 
 async function makeFallbackChain(): Promise<FallbackChain | null> {
@@ -120,6 +140,46 @@ export function initOrchestrator(): void {
         llmResults = unresolved
       }
 
+      // ── Repeatable section auto-add (P3-T7) ─────────────────────────────────
+      if (settings.autoAddRepeatableBlocks) {
+        // Count detected group blocks and compare to profile entry counts
+        const groupCounts = new Map<string, number>()
+        for (const r of rulesResults) {
+          if (r.field.group) groupCounts.set(r.field.group, (groupCounts.get(r.field.group) ?? 0) + 1)
+        }
+
+        // For experience groups: compare to profile.experience.length
+        const expGroupKey = [...groupCounts.keys()].find(k => /experience|work|employment/i.test(k))
+        if (expGroupKey) {
+          const existing = groupCounts.get(expGroupKey) ?? 1
+          const needed = Math.max(0, profile.experience.length - existing)
+          // Find the "Add another" button selector from any field in that group
+          const addButtonSel = fields.find(f => f.group === expGroupKey)?.addAnotherButtonSelector
+          if (addButtonSel && needed > 0) {
+            for (let i = 0; i < needed; i++) {
+              await chrome.scripting.executeScript({
+                target: { tabId },
+                func: (sel: string) => {
+                  // @ts-expect-error runtime
+                  return window.__jff_addRepeatableBlock?.(sel) ?? false
+                },
+                args: [addButtonSel],
+              })
+              await new Promise(r => setTimeout(r, 600))
+            }
+            // Re-detect after adding blocks
+            const [{ result: newFields }] = await chrome.scripting.executeScript<[], DetectedField[]>({
+              target: { tabId },
+              func: () => {
+                // @ts-expect-error runtime
+                return window.__jff_detectFields?.() ?? []
+              },
+            })
+            if (newFields?.length) fields.splice(0, fields.length, ...newFields)
+          }
+        }
+      }
+
       // Merge: resolved (rules) + LLM structural + Q&A + upload flags
       const uploadResults = rulesResults.filter(r => r.field.isUpload)
       const mappingResults: MappingResult[] = [
@@ -159,12 +219,15 @@ export function initOrchestrator(): void {
     }
   )
 
-  // APPLY_VALUES — write approved values, record history
+  // APPLY_VALUES — write approved values, record history (idempotent via requestId)
   onMessage<{ tabId: number; results: MappingResult[]; url: string; company: string | null; role: string | null }, WriteResult[]>(
     'APPLY_VALUES',
     async ({ tabId, results, url, company, role }) => {
       const session = sessions.get(tabId) ?? await restoreSession(tabId)
       if (!session || session.tabId !== tabId) throw new Error('Tab changed — please re-detect.')
+
+      // EC-22: idempotency — if this requestId was already completed, skip history write
+      const alreadyDone = await isCompleted(session.requestId)
 
       await persistSession(session)
 
@@ -179,20 +242,23 @@ export function initOrchestrator(): void {
 
       const rawSettings = await fileStore.readSettings()
       const settings = settingsService.parse(rawSettings)
-      const histSvc = new HistoryService(fileStore)
-      const filled = writeResults?.filter(r => r.ok && r.note !== 'skipped').length ?? 0
-      const flagged = results.filter(r => !r.include || r.needsReview).length
-
-      await histSvc.add({
-        url, url_normalized: normalizeUrl(url),
-        company, role,
-        profile_used: session.profileSlug,
-        filled_at: new Date().toISOString(),
-        status: 'filled',
-        fields_filled: filled,
-        fields_flagged: flagged,
-      })
       void settings
+
+      if (!alreadyDone) {
+        const histSvc = new HistoryService(fileStore)
+        const filled = writeResults?.filter(r => r.ok && r.note !== 'skipped').length ?? 0
+        const flagged = results.filter(r => !r.include || r.needsReview).length
+        await histSvc.add({
+          url, url_normalized: normalizeUrl(url),
+          company, role,
+          profile_used: session.profileSlug,
+          filled_at: new Date().toISOString(),
+          status: 'filled',
+          fields_filled: filled,
+          fields_flagged: flagged,
+        })
+        await markCompleted(session.requestId)
+      }
 
       await clearSession(tabId)
       return writeResults ?? []
