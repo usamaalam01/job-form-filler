@@ -337,19 +337,36 @@ export function initOrchestrator(): void {
   )
 
   // TEST_PROVIDER — test a provider's connectivity
-  // Intentionally bypasses fileStore so it works before/without a folder connection.
-  // Reads provider config from stored settings (falls back to defaults) and API key
-  // from chrome.storage.local directly.
-  onMessage<{ providerId: string }, { ok: boolean; latencyMs?: number; error?: string }>(
+  // Accepts model + baseUrl from the UI so the test always uses live values,
+  // not stale stored ones. Bypasses fileStore entirely.
+  onMessage<{ providerId: string; model: string; baseUrl: string }, { ok: boolean; latencyMs?: number; error?: string }>(
     'TEST_PROVIDER',
-    async ({ providerId }) => {
-      debugLog.info('orchestrator', `Testing provider: ${providerId}`)
-      // Build a minimal chain that doesn't need fileStore to be connected
+    async ({ providerId, model, baseUrl }) => {
+      debugLog.info('orchestrator', `Testing provider: ${providerId}`, { model })
+
+      const apiKey = await settingsService.getApiKey(providerId)
+      if (!apiKey) return { ok: false, error: 'No API key set. Paste your key and try again.' }
+      if (!model) return { ok: false, error: 'No model set. Enter a model name first.' }
+
+      const { makeProvider } = await import('./llm/fallback')
       const settings = await loadSettingsNoFolder()
-      const chain = new FallbackChain([providerId], settingsService, settings)
-      const result = await chain.testProvider(providerId)
-      debugLog.info('orchestrator', `Provider test result`, result)
-      return result
+      const provider = makeProvider({ id: providerId, name: providerId, model, baseUrl })
+      const start = Date.now()
+      try {
+        await provider.complete(
+          { systemPrompt: 'Reply with the single word: ok', userPrompt: 'ok', maxTokens: 5 },
+          apiKey,
+          settings.llmTimeoutMs,
+        )
+        const result = { ok: true, latencyMs: Date.now() - start }
+        debugLog.info('orchestrator', `Provider test OK`, result)
+        return result
+      } catch (err) {
+        const { LLMProviderError } = await import('./llm/provider')
+        const error = err instanceof LLMProviderError ? err.llmError.message : String(err)
+        debugLog.error('orchestrator', `Provider test failed`, { error })
+        return { ok: false, error }
+      }
     }
   )
 
