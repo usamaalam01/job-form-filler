@@ -248,6 +248,7 @@ export type MessageType =
   | 'SAVE_QA_ENTRY'
   | 'TEST_PROVIDER'
   | 'TEST_PROVIDER_RESULT'
+  | 'GET_DEBUG_LOG'
   | 'ERROR'
 
 export interface Message<T = unknown> {

@@ -14,6 +14,7 @@ import { mapFieldsWithLLM } from './mapper-llm'
 import { matchQuestion } from './qa-matcher'
 import { structureProfileText } from './profile-builder'
 import { FallbackExhaustedError } from './llm/provider'
+import { debugLog } from './debug-log'
 
 // ─── Session store (in-memory + persisted for EC-22) ─────────────────────────
 
@@ -189,6 +190,8 @@ export function initOrchestrator(): void {
         ...uploadResults,
       ]
 
+      debugLog.info('orchestrator', `Detected ${fields.length} fields, mapped ${resolved.length} via rules, ${llmResults.length + qaResults.length} via LLM`, { tabId, profileSlug, llmError })
+
       const session: FillSession = {
         tabId, profileSlug,
         detectedFields: fields,
@@ -260,6 +263,7 @@ export function initOrchestrator(): void {
         await markCompleted(session.requestId)
       }
 
+      debugLog.info('orchestrator', `Applied values`, { tabId, filled: writeResults?.filter(r => r.ok).length, failed: writeResults?.filter(r => !r.ok).length })
       await clearSession(tabId)
       return writeResults ?? []
     }
@@ -322,10 +326,19 @@ export function initOrchestrator(): void {
   onMessage<{ providerId: string }, { ok: boolean; latencyMs?: number; error?: string }>(
     'TEST_PROVIDER',
     async ({ providerId }) => {
+      debugLog.info('orchestrator', `Testing provider: ${providerId}`)
       const chain = await makeFallbackChain()
       if (!chain) return { ok: false, error: 'No providers configured.' }
-      return chain.testProvider(providerId)
+      const result = await chain.testProvider(providerId)
+      debugLog.info('orchestrator', `Provider test result`, result)
+      return result
     }
+  )
+
+  // GET_DEBUG_LOG — return current log entries to panel
+  onMessage<void, import('./debug-log').LogEntry[]>(
+    'GET_DEBUG_LOG',
+    () => debugLog.getEntries()
   )
 
   // Restore orphaned sessions on SW startup (EC-22)
