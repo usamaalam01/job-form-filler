@@ -276,6 +276,7 @@ export function Panel() {
           <ProfileSelector
             onEdit={() => setEditingProfile(true)}
             onNew={createProfile}
+            onImported={loadProfiles}
           />
 
           {/* Duplicate warning */}
