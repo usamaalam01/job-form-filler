@@ -95,7 +95,8 @@ export function initOrchestrator(): void {
       const qaBankMd = await fileStore.readQABank() ?? ''
       const qaBank = parseQABank(qaBankMd)
 
-      // Inject content script and detect fields
+      // Content script is declared in manifest.json and auto-injected by Chrome.
+      // Detect fields by calling the exposed window.__jff_detectFields function.
       const [{ result: detectedFields }] = await chrome.scripting.executeScript<[], DetectedField[]>({
         target: { tabId },
         func: () => {
