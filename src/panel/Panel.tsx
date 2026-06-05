@@ -189,7 +189,8 @@ export function Panel() {
     await fileStore.writeProfile(slug, template)
     await loadProfiles()
     setActiveProfile(slug)
-    setEditingProfile(true)
+    // Open AI builder so user can paste resume text immediately
+    setBuildingProfile(true)
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
