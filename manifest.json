@@ -19,7 +19,7 @@
     "activeTab",
     "storage"
   ],
-  "host_permissions": [],
+  "host_permissions": ["https://*/*", "http://*/*"],
   "icons": {
     "16": "public/icon-16.png",
     "32": "public/icon-32.png",
