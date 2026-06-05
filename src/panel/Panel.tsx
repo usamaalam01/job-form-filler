@@ -134,15 +134,26 @@ export function Panel() {
   // ── Detect & map ──────────────────────────────────────────────────────────
 
   const detectAndMap = async () => {
-    if (!tabId || !activeProfile) return
+    if (!activeProfile) return
     setIsDetecting(true)
     setDetectError(null)
     setApplyResults(null)
     try {
+      // Re-query active tab at click time to avoid stale tab ID
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (!activeTab?.id) {
+        setDetectError('No active tab found. Click on the job page first.')
+        return
+      }
+      const currentTabId = activeTab.id
+      const currentTabUrl = activeTab.url ?? ''
+      setTabId(currentTabId)
+      setTabUrl(currentTabUrl)
+
       const { session, duplicate: dup, llmError } = await sendToBackground<
         { tabId: number; profileSlug: string },
         { session: { mappingResults: MappingResult[] }; duplicate: ApplicationRecord | null; llmError?: string }
-      >({ type: 'DETECT_FIELDS', payload: { tabId, profileSlug: activeProfile } })
+      >({ type: 'DETECT_FIELDS', payload: { tabId: currentTabId, profileSlug: activeProfile } })
 
       setMappingResults(session.mappingResults)
       setDuplicate(dup ? { record: dup } : null)
@@ -157,16 +168,21 @@ export function Panel() {
   // ── Apply to page ─────────────────────────────────────────────────────────
 
   const applyToPage = async () => {
-    if (!tabId) return
     setIsApplying(true)
     setApplyError(null)
     try {
+      // Re-query active tab at click time to avoid stale tab ID
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      const currentTabId = activeTab?.id ?? tabId
+      const currentTabUrl = activeTab?.url ?? tabUrl
+      if (!currentTabId) return
+
       const results = await sendToBackground<
         { tabId: number; results: MappingResult[]; url: string; company: string | null; role: string | null },
         Array<{ fieldId: string; ok: boolean; note?: string }>
       >({
         type: 'APPLY_VALUES',
-        payload: { tabId, results: mappingResults, url: tabUrl, company: null, role: null },
+        payload: { tabId: currentTabId, results: mappingResults, url: currentTabUrl, company: null, role: null },
       })
       const ok = results.filter(r => r.ok && r.note !== 'skipped').length
       const fail = results.filter(r => !r.ok).length
