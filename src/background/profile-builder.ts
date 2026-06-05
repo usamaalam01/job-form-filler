@@ -67,6 +67,7 @@ Rules:
 - Use ONLY facts explicitly stated in the raw text. Never add, infer, or invent details.
 - Follow the schema exactly. Use YYYY-MM for dates. Use "present" for current roles.
 - If a field is not mentioned in the raw text, leave it blank (the dash and key, but empty value).
+- PRESERVE ALL bullet points / highlights from each job experience. Do NOT summarize, shorten, merge, or drop any achievement or responsibility. Copy them verbatim or with minimal grammar cleanup only.
 - Return ONLY the markdown. No preamble, no explanation, no code fences.`,
     userPrompt: `Target role: ${targetRole || 'Not specified'}
 Today's date: ${today}
@@ -78,7 +79,7 @@ Raw text to convert:
 ${rawText}
 
 Return the completed profile markdown:`,
-    maxTokens: 2048,
+    maxTokens: 4096,
   })
 
   let md = res.content.trim()
