@@ -96,16 +96,27 @@ export function initOrchestrator(): void {
       const qaBank = parseQABank(qaBankMd)
 
       // Content script is declared in manifest.json and auto-injected by Chrome.
-      // Detect fields by calling the exposed window.__jff_detectFields function.
-      const [{ result: detectedFields }] = await chrome.scripting.executeScript<[], DetectedField[]>({
-        target: { tabId },
+      // Detect fields across ALL frames (Greenhouse/Lever forms are often in iframes)
+      // and merge the results. A null result means the content script isn't present
+      // in that frame (e.g. page was open before the extension loaded).
+      const frameResults = await chrome.scripting.executeScript<[], DetectedField[] | null>({
+        target: { tabId, allFrames: true },
         func: () => {
           // @ts-expect-error runtime injection
-          return window.__jff_detectFields?.() ?? []
+          if (typeof window.__jff_detectFields !== 'function') return null
+          // @ts-expect-error runtime injection
+          return window.__jff_detectFields()
         },
       })
 
-      const fields = detectedFields ?? []
+      // If every frame returned null, the content script is not injected anywhere.
+      const anyInjected = frameResults.some(r => r.result !== null)
+      if (!anyInjected) {
+        throw new Error('Content script not active on this page. Please reload the job page (F5) and try again.')
+      }
+
+      // Merge fields from all frames that returned an array
+      const fields = frameResults.flatMap(r => r.result ?? [])
 
       // ── Hybrid mapping ────────────────────────────────────────────────────
 
@@ -244,14 +255,29 @@ export function initOrchestrator(): void {
 
       await persistSession(session)
 
-      const [{ result: writeResults }] = await chrome.scripting.executeScript<[MappingResult[]], WriteResult[]>({
-        target: { tabId },
+      // Write into all frames (fields may live in an iframe). Each frame writes
+      // the fields it owns; fields not present in a frame are reported as failed
+      // there but may succeed in another frame. Merge by fieldId, preferring ok.
+      const frameWrites = await chrome.scripting.executeScript<[MappingResult[]], WriteResult[]>({
+        target: { tabId, allFrames: true },
         func: (mappings) => {
           // @ts-expect-error runtime injection
-          return window.__jff_writeValues?.(mappings) ?? []
+          if (typeof window.__jff_writeValues !== 'function') return []
+          // @ts-expect-error runtime injection
+          return window.__jff_writeValues(mappings)
         },
         args: [results],
       })
+
+      const mergedWrites = new Map<string, WriteResult>()
+      for (const frame of frameWrites) {
+        for (const wr of frame.result ?? []) {
+          const existing = mergedWrites.get(wr.fieldId)
+          // Prefer a successful write over a failed one from another frame
+          if (!existing || (!existing.ok && wr.ok)) mergedWrites.set(wr.fieldId, wr)
+        }
+      }
+      const writeResults = [...mergedWrites.values()]
 
       const rawSettings = await fileStore.readSettings()
       const settings = settingsService.parse(rawSettings)
